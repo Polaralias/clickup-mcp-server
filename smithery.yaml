@@ -1,27 +1,2 @@
+runtime: container
 dockerfile: Dockerfile
-
-startCommand:
-  type: stdio
-  configSchema:
-    type: object
-    required:
-      - clickupApiKey
-      - clickupTeamId
-    properties:
-      clickupApiKey:
-        type: string
-        description: Your ClickUp API key.
-      clickupTeamId:
-        type: string
-        description: Your ClickUp Team ID.
-  commandFunction: |
-    function(config) {
-      return {
-        command: "node",
-        args: ["build/index.js"],
-        env: {
-          CLICKUP_API_KEY: config.clickupApiKey,
-          CLICKUP_TEAM_ID: config.clickupTeamId
-        }
-      };
-    }
