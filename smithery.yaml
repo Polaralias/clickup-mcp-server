@@ -25,7 +25,7 @@ startCommand:
     })
 
 env:
-  - CLICKUP_API_KEY
-  - CLICKUP_TEAM_ID
+  CLICKUP_API_KEY: ${CLICKUP_API_KEY}
+  CLICKUP_TEAM_ID: ${CLICKUP_TEAM_ID}
   
 buildCommand: npm run build
