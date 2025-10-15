@@ -14,16 +14,18 @@ startCommand:
       clickupTeamId:
         type: string
         description: Your ClickUp Team ID.
-  commandFunction: |
-    function(config) {
-      return {
-        command: "node",
-        args: ["build/index.js"],
-        env: {
-          CLICKUP_API_KEY: config.clickupApiKey,
-          CLICKUP_TEAM_ID: config.clickupTeamId
-        }
-      };
-    }
+  commandFunction: |-
+    (config) => ({
+      command: 'node',
+      args: ['build/index.js'],
+      env: {
+        CLICKUP_API_KEY: config.clickupApiKey,
+        CLICKUP_TEAM_ID: config.clickupTeamId
+      }
+    })
+
+exampleConfig:
+  clickupApiKey: "${{ secrets.CLICKUP_API_KEY }}"
+  clickupTeamId: "${{ secrets.CLICKUP_TEAM_ID }}"
 
 buildCommand: npm run build
