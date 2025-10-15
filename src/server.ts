@@ -93,13 +93,13 @@ import {
 } from "./tools/member.js";
 
 import { Logger } from "./logger.js";
-import { clickUpServices } from "./services/shared.js";
+import { getWorkspaceService } from "./services/shared.js";
 
 // Create a logger instance for server
 const logger = new Logger('Server');
 
-// Use existing services from shared module instead of creating new ones
-const { workspace } = clickUpServices;
+// Helper to access the shared workspace service without caching stale references
+const workspace = () => getWorkspaceService();
 
 /**
  * Determines if a tool should be enabled based on ENABLED_TOOLS and DISABLED_TOOLS configuration.
@@ -228,6 +228,17 @@ export function configureServer() {
     logger.info(`Received CallTool request for tool: ${name}`, {
       params
     });
+
+    if (!config.clickupApiKey || !config.clickupTeamId) {
+      const message = "ClickUp credentials are not configured. Please provide CLICKUP_API_KEY and CLICKUP_TEAM_ID before invoking tools.";
+      logger.warn("Blocking tool execution due to missing credentials", {
+        tool: name
+      });
+      throw {
+        code: -32001,
+        message
+      };
+    }
 
     // Check if the tool is enabled
     if (!isToolEnabled(name)) {

@@ -38,6 +38,8 @@ export const configSchema = z.object({
   clickupTeamId: z.string().describe("Your ClickUp Team ID.")
 });
 
+const REQUIRED_CREDENTIAL_KEYS = ['clickupApiKey', 'clickupTeamId'] as const;
+
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   error("Uncaught Exception", { message: err.message, stack: err.stack });
@@ -62,16 +64,14 @@ async function startStdioServer() {
   });
 
   const configuration = getConfiguration();
-  const requiredCredentialKeys = ['clickupApiKey', 'clickupTeamId'] as const;
-  try {
+  const missing = REQUIRED_CREDENTIAL_KEYS.filter((key) => !configuration[key]);
+
+  if (missing.length === 0) {
     validateConfig(configuration);
-  } catch (validationError) {
-    const missing = requiredCredentialKeys.filter((key) => !configuration[key]);
-    error('Missing required configuration', {
-      missing,
-      message: validationError instanceof Error ? validationError.message : String(validationError)
+  } else {
+    info('Starting server without ClickUp credentials - tool invocations will be blocked until provided', {
+      missing
     });
-    process.exit(1);
   }
 
   // Detect and log configuration source
@@ -83,11 +83,17 @@ async function startStdioServer() {
   });
 
   // Backfill process.env for downstream consumers that still rely on it
-  process.env.CLICKUP_API_KEY = configuration.clickupApiKey;
-  process.env.CLICKUP_TEAM_ID = configuration.clickupTeamId;
+  if (configuration.clickupApiKey) {
+    process.env.CLICKUP_API_KEY = configuration.clickupApiKey;
+  }
+  if (configuration.clickupTeamId) {
+    process.env.CLICKUP_TEAM_ID = configuration.clickupTeamId;
+  }
 
   // Configure the server with all handlers
   info('Configuring server request handlers');
+  const { resetClickUpServices } = await import('./services/shared.js');
+  resetClickUpServices();
   const { configureServer, server } = await import('./server.js');
   await configureServer();
 
@@ -136,9 +142,25 @@ export default async function createServer({
     clickupTeamId: sessionConfig.clickupTeamId,
   });
 
-  process.env.CLICKUP_API_KEY = runtimeConfig.clickupApiKey;
-  process.env.CLICKUP_TEAM_ID = runtimeConfig.clickupTeamId;
+  const sessionMissing = REQUIRED_CREDENTIAL_KEYS.filter((key) => !runtimeConfig[key]);
 
+  if (sessionMissing.length === 0) {
+    validateConfig(runtimeConfig);
+  } else {
+    info('Session started without complete ClickUp credentials - tools will remain unavailable until provided', {
+      missing: sessionMissing
+    });
+  }
+
+  if (runtimeConfig.clickupApiKey) {
+    process.env.CLICKUP_API_KEY = runtimeConfig.clickupApiKey;
+  }
+  if (runtimeConfig.clickupTeamId) {
+    process.env.CLICKUP_TEAM_ID = runtimeConfig.clickupTeamId;
+  }
+
+  const { resetClickUpServices } = await import('./services/shared.js');
+  resetClickUpServices();
   const { configureServer, server } = await import('./server.js');
   await configureServer();
   return server as unknown as McpServer;

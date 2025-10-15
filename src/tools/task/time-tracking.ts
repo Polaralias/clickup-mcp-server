@@ -12,7 +12,7 @@
  * - Delete a time entry
  */
 
-import { timeTrackingService } from "../../services/shared.js";
+import { getTimeTrackingService } from "../../services/shared.js";
 import { getTaskId } from "./utilities.js";
 import { Logger } from "../../logger.js";
 import { ErrorCode } from "../../services/clickup/base.js";
@@ -21,6 +21,7 @@ import { sponsorService } from "../../utils/sponsor-service.js";
 
 // Logger instance
 const logger = new Logger('TimeTrackingTools');
+const timeTrackingService = () => getTimeTrackingService();
 
 /**
  * Tool definition for getting time entries
@@ -224,7 +225,7 @@ export async function handleGetTaskTimeEntries(params: any) {
     }
 
     // Get time entries
-    const result = await timeTrackingService.getTimeEntries(taskId, startDate, endDate);
+    const result = await timeTrackingService().getTimeEntries(taskId, startDate, endDate);
 
     if (!result.success) {
       return sponsorService.createErrorResponse(result.error?.message || "Failed to get time entries");
@@ -276,7 +277,7 @@ export async function handleStartTimeTracking(params: any) {
     }
 
     // Check for currently running timer
-    const currentTimerResult = await timeTrackingService.getCurrentTimeEntry();
+    const currentTimerResult = await timeTrackingService().getCurrentTimeEntry();
     if (currentTimerResult.success && currentTimerResult.data) {
       return sponsorService.createErrorResponse("A timer is already running. Please stop the current timer before starting a new one.", {
         timer: {
@@ -300,7 +301,7 @@ export async function handleStartTimeTracking(params: any) {
     };
 
     // Start time tracking
-    const result = await timeTrackingService.startTimeTracking(requestData);
+    const result = await timeTrackingService().startTimeTracking(requestData);
 
     if (!result.success) {
       return sponsorService.createErrorResponse(result.error?.message || "Failed to start time tracking");
@@ -342,7 +343,7 @@ export async function handleStopTimeTracking(params: any) {
 
   try {
     // Check for currently running timer
-    const currentTimerResult = await timeTrackingService.getCurrentTimeEntry();
+    const currentTimerResult = await timeTrackingService().getCurrentTimeEntry();
     if (currentTimerResult.success && !currentTimerResult.data) {
       return sponsorService.createErrorResponse("No timer is currently running. Start a timer before trying to stop it.");
     }
@@ -354,7 +355,7 @@ export async function handleStopTimeTracking(params: any) {
     };
 
     // Stop time tracking
-    const result = await timeTrackingService.stopTimeTracking(requestData);
+    const result = await timeTrackingService().stopTimeTracking(requestData);
 
     if (!result.success) {
       return sponsorService.createErrorResponse(result.error?.message || "Failed to stop time tracking");
@@ -426,7 +427,7 @@ export async function handleAddTimeEntry(params: any) {
     };
 
     // Add time entry
-    const result = await timeTrackingService.addTimeEntry(requestData);
+    const result = await timeTrackingService().addTimeEntry(requestData);
 
     if (!result.success) {
       return sponsorService.createErrorResponse(result.error?.message || "Failed to add time entry");
@@ -476,7 +477,7 @@ export async function handleDeleteTimeEntry(params: any) {
     }
 
     // Delete time entry
-    const result = await timeTrackingService.deleteTimeEntry(timeEntryId);
+    const result = await timeTrackingService().deleteTimeEntry(timeEntryId);
 
     if (!result.success) {
       return sponsorService.createErrorResponse(result.error?.message || "Failed to delete time entry");
@@ -501,7 +502,7 @@ export async function handleGetCurrentTimeEntry(params?: any) {
 
   try {
     // Get current time entry
-    const result = await timeTrackingService.getCurrentTimeEntry();
+    const result = await timeTrackingService().getCurrentTimeEntry();
 
     if (!result.success) {
       return sponsorService.createErrorResponse(result.error?.message || "Failed to get current time entry");

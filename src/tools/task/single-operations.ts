@@ -17,7 +17,7 @@ import {
   UpdateTaskData
 } from '../../services/clickup/types.js';
 import { parseDueDate } from '../utils.js';
-import { clickUpServices } from '../../services/shared.js';
+import { getTaskService } from '../../services/shared.js';
 import { 
   formatTaskData,
   resolveListIdWithValidation,
@@ -27,7 +27,7 @@ import {
 } from './utilities.js';
 
 // Use shared services instance
-const { task: taskService } = clickUpServices;
+const taskService = () => getTaskService();
 
 //=============================================================================
 // COMMON VALIDATION UTILITIES

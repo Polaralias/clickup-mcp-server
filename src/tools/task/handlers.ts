@@ -9,7 +9,7 @@
  */
 
 import { ClickUpComment, ClickUpTask, TaskPriority, UpdateTaskData, TaskFilters, toTaskPriority, CreateTaskData, TaskSummary } from '../../services/clickup/types.js';
-import { clickUpServices } from '../../services/shared.js';
+import { getTaskService, getListService, getWorkspaceService } from '../../services/shared.js';
 import { BulkService } from '../../services/clickup/bulk.js';
 import { BatchResult } from '../../utils/concurrency-utils.js';
 import { parseDueDate } from '../utils.js';
@@ -26,15 +26,25 @@ import { TaskService } from '../../services/clickup/task/task-service.js';
 import { ExtendedTaskFilters } from '../../services/clickup/types.js';
 import { handleResolveAssignees } from '../member.js';
 import { findListIDByName } from '../list.js';
-import { workspaceService } from '../../services/shared.js';
 import { isNameMatch } from '../../utils/resolver-utils.js';
 import { Logger } from '../../logger.js';
 
-// Use shared services instance
-const { task: taskService, list: listService } = clickUpServices;
+// Helper accessors so we always read the latest shared services
+const taskService = () => getTaskService();
+const listService = () => getListService();
+const workspaceService = () => getWorkspaceService();
 
-// Create a bulk service instance that uses the task service
-const bulkService = new BulkService(taskService);
+// Lazily create a bulk service tied to the current task service instance
+let bulkServiceInstance: BulkService | null = null;
+let bulkServiceTaskRef: TaskService | null = null;
+const getBulkService = () => {
+  const currentTaskService = taskService();
+  if (!bulkServiceInstance || bulkServiceTaskRef !== currentTaskService) {
+    bulkServiceInstance = new BulkService(currentTaskService);
+    bulkServiceTaskRef = currentTaskService;
+  }
+  return bulkServiceInstance;
+};
 
 // Create a logger instance for task handlers
 const logger = new Logger('TaskHandlers');
@@ -268,11 +278,11 @@ async function findTask(params: {
   try {
     // Direct path for taskId - most efficient (now includes automatic custom ID detection)
     if (taskId) {
-      const task = await taskService.getTask(taskId);
+      const task = await taskService().getTask(taskId);
 
       // Add subtasks if requested
       if (includeSubtasks) {
-        const subtasks = await taskService.getSubtasks(task.id);
+        const subtasks = await taskService().getSubtasks(task.id);
         return { task, subtasks };
       }
 
@@ -282,11 +292,11 @@ async function findTask(params: {
     // Direct path for customTaskId - for explicit custom ID requests
     // Note: This is now mainly for backward compatibility since getTask() handles custom IDs automatically
     if (customTaskId) {
-      const task = await taskService.getTaskByCustomId(customTaskId);
+      const task = await taskService().getTaskByCustomId(customTaskId);
 
       // Add subtasks if requested
       if (includeSubtasks) {
-        const subtasks = await taskService.getSubtasks(task.id);
+        const subtasks = await taskService().getSubtasks(task.id);
         return { task, subtasks };
       }
 
@@ -298,7 +308,7 @@ async function findTask(params: {
       const listId = await resolveListIdWithValidation(null, listName);
 
       // Get all tasks in the list
-      const allTasks = await taskService.getTasks(listId);
+      const allTasks = await taskService().getTasks(listId);
 
       // Find the task that matches the name
       const matchingTask = findTaskByName(allTasks, taskName);
@@ -309,7 +319,7 @@ async function findTask(params: {
 
       // Add subtasks if requested
       if (includeSubtasks) {
-        const subtasks = await taskService.getSubtasks(matchingTask.id);
+        const subtasks = await taskService().getSubtasks(matchingTask.id);
         return { task: matchingTask, subtasks };
       }
 
@@ -321,7 +331,7 @@ async function findTask(params: {
       logger.debug(`Searching all lists for task: "${taskName}"`);
 
       // Get workspace hierarchy which contains all lists
-      const hierarchy = await workspaceService.getWorkspaceHierarchy();
+      const hierarchy = await workspaceService().getWorkspaceHierarchy();
 
       // Extract all list IDs from the hierarchy
       const listIds: string[] = [];
@@ -340,7 +350,7 @@ async function findTask(params: {
       // Search through each list
       const searchPromises = listIds.map(async (listId) => {
         try {
-          const tasks = await taskService.getTasks(listId);
+          const tasks = await taskService().getTasks(listId);
           const matchingTask = findTaskByName(tasks, taskName);
           if (matchingTask) {
             logger.debug(`Found task "${matchingTask.name}" (ID: ${matchingTask.id}) in list with ID "${listId}"`);
@@ -380,7 +390,7 @@ async function findTask(params: {
 
       // Add subtasks if requested
       if (includeSubtasks) {
-        const subtasks = await taskService.getSubtasks(bestMatch.id);
+        const subtasks = await taskService().getSubtasks(bestMatch.id);
         return { task: bestMatch, subtasks };
       }
 
@@ -618,7 +628,7 @@ export async function createTaskHandler(params) {
     taskData.start_date_time = true;
   }
 
-  return await taskService.createTask(listId, taskData);
+  return await taskService().createTask(listId, taskData);
 }
 
 
@@ -627,7 +637,6 @@ export async function createTaskHandler(params) {
  * Handler for updating a task
  */
 export async function updateTaskHandler(
-  taskService: TaskService,
   params: UpdateTaskData & {
     taskId?: string;
     taskName?: string;
@@ -652,7 +661,7 @@ export async function updateTaskHandler(
   try {
     // Get the task ID using global lookup
     const id = await getTaskId(taskId, taskName, listName, customTaskId);
-    return await taskService.updateTask(id, updateData);
+    return await taskService().updateTask(id, updateData);
   } catch (error) {
     throw new Error(`Failed to update task: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -664,7 +673,7 @@ export async function updateTaskHandler(
 export async function moveTaskHandler(params) {
   const taskId = await getTaskId(params.taskId, params.taskName, undefined, params.customTaskId, false);
   const listId = await getListId(params.listId, params.listName);
-  return await taskService.moveTask(taskId, listId);
+  return await taskService().moveTask(taskId, listId);
 }
 
 /**
@@ -678,7 +687,7 @@ export async function duplicateTaskHandler(params) {
     listId = await getListId(params.listId, params.listName);
   }
 
-  return await taskService.duplicateTask(taskId, listId);
+  return await taskService().duplicateTask(taskId, listId);
 }
 
 /**
@@ -686,7 +695,7 @@ export async function duplicateTaskHandler(params) {
  */
 export async function getTasksHandler(params) {
   const listId = await getListId(params.listId, params.listName);
-  return await taskService.getTasks(listId, buildTaskFilters(params));
+  return await taskService().getTasks(listId, buildTaskFilters(params));
 }
 
 /**
@@ -695,7 +704,7 @@ export async function getTasksHandler(params) {
 export async function getTaskCommentsHandler(params) {
   const taskId = await getTaskId(params.taskId, params.taskName, params.listName);
   const { start, startId } = params;
-  return await taskService.getTaskComments(taskId, start, startId);
+  return await taskService().getTaskComments(taskId, start, startId);
 }
 
 /**
@@ -719,7 +728,7 @@ export async function createTaskCommentHandler(params) {
     } = params;
 
     // Create the comment
-    return await taskService.createTaskComment(taskId, commentText, notifyAll, assignee);
+    return await taskService().createTaskComment(taskId, commentText, notifyAll, assignee);
   } catch (error) {
     // If this is a task lookup error, provide more helpful message
     if (error.message?.includes('not found') || error.message?.includes('identify task')) {
@@ -783,7 +792,6 @@ function wouldExceedTokenLimit(response: any): boolean {
  * Handler for getting workspace tasks with filtering
  */
 export async function getWorkspaceTasksHandler(
-  taskService: TaskService,
   params: Record<string, any>
 ): Promise<Record<string, any>> {
   try {
@@ -834,7 +842,7 @@ export async function getWorkspaceTasksHandler(
       const fetchPromises = params.list_ids.map(async (listId: string) => {
         try {
           // Get the default list view ID
-          const viewId = await taskService.getListViews(listId);
+          const viewId = await taskService().getListViews(listId);
 
           if (!viewId) {
             logger.warn(`No default view found for list ${listId}, skipping`);
@@ -861,7 +869,7 @@ export async function getWorkspaceTasksHandler(
           };
 
           // Get tasks from the view
-          const tasksFromView = await taskService.getTasksFromView(viewId, supportedFilters);
+          const tasksFromView = await taskService().getTasksFromView(viewId, supportedFilters);
           return tasksFromView;
 
         } catch (error) {
@@ -993,14 +1001,14 @@ export async function getWorkspaceTasksHandler(
     };
 
     // Get tasks with adaptive response format support
-    const response = await taskService.getWorkspaceTasks(filters);
+    const response = await taskService().getWorkspaceTasks(filters);
 
     // Check token limit at handler level
     if (params.detail_level !== 'summary' && wouldExceedTokenLimit(response)) {
       logger.info('Response would exceed token limit, fetching summary format instead');
 
       // Refetch with summary format
-      const summaryResponse = await taskService.getWorkspaceTasks({
+      const summaryResponse = await taskService().getWorkspaceTasks({
         ...filters,
         detail_level: 'summary'
       });
@@ -1071,7 +1079,7 @@ export async function createBulkTasksHandler(params: any) {
   const bulkOptions = parseBulkOptions(options);
 
   // Create tasks - pass arguments in correct order: listId, tasks, options
-  return await bulkService.createTasks(targetListId, formattedTasks, bulkOptions);
+  return await getBulkService().createTasks(targetListId, formattedTasks, bulkOptions);
 }
 
 /**
@@ -1087,7 +1095,7 @@ export async function updateBulkTasksHandler(params: any) {
   const bulkOptions = parseBulkOptions(options);
 
   // Update tasks
-  return await bulkService.updateTasks(tasks, bulkOptions);
+  return await getBulkService().updateTasks(tasks, bulkOptions);
 }
 
 /**
@@ -1106,7 +1114,7 @@ export async function moveBulkTasksHandler(params: any) {
   const bulkOptions = parseBulkOptions(options);
 
   // Move tasks
-  return await bulkService.moveTasks(tasks, resolvedTargetListId, bulkOptions);
+  return await getBulkService().moveTasks(tasks, resolvedTargetListId, bulkOptions);
 }
 
 /**
@@ -1122,7 +1130,7 @@ export async function deleteBulkTasksHandler(params: any) {
   const bulkOptions = parseBulkOptions(options);
 
   // Delete tasks
-  return await bulkService.deleteTasks(tasks, bulkOptions);
+  return await getBulkService().deleteTasks(tasks, bulkOptions);
 }
 
 /**
@@ -1130,6 +1138,6 @@ export async function deleteBulkTasksHandler(params: any) {
  */
 export async function deleteTaskHandler(params) {
   const taskId = await getTaskId(params.taskId, params.taskName, params.listName);
-  await taskService.deleteTask(taskId);
+  await taskService().deleteTask(taskId);
   return true;
 } 

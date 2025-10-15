@@ -13,13 +13,14 @@ import {
 } from '../../services/clickup/types.js';
 import { BatchProcessingOptions } from '../../utils/concurrency-utils.js';
 import { formatDueDate } from '../utils.js';
-import { clickUpServices } from '../../services/shared.js';
+import { getWorkspaceService, getTaskService } from '../../services/shared.js';
 import { findListIDByName } from '../../tools/list.js';
 import { WorkspaceService } from '../../services/clickup/workspace.js';
 import { TaskPriority } from '../../services/clickup/types.js';
 
 // Use shared services instance for ID resolution
-const { workspace: workspaceService, task: taskService } = clickUpServices;
+const workspaceService = () => getWorkspaceService();
+const taskService = () => getTaskService();
 
 //=============================================================================
 // DATA FORMATTING UTILITIES
@@ -317,7 +318,7 @@ export async function resolveListIdWithValidation(listId?: string, listName?: st
   if (listId) return listId;
   
   // At this point we know we have listName (validation ensures this)
-  const listInfo = await findListIDByName(workspaceService, listName!);
+  const listInfo = await findListIDByName(workspaceService(), listName!);
   
   if (!listInfo) {
     throw new Error(`List "${listName}" not found`);
@@ -385,7 +386,7 @@ export async function getTaskId(
   }
 
   try {
-    const result = await taskService.findTasks({
+    const result = await taskService().findTasks({
       taskId,
       customTaskId,
       taskName,
