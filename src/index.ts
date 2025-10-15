@@ -28,7 +28,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { configureServer, server } from './server.js';
 import { clickUpServices } from './services/shared.js';
 import { info, error } from './logger.js';
-import config from './config.js';
+import config, { getConfiguration, validateConfig } from './config.js';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { startSSEServer } from './sse_server.js';
@@ -68,22 +68,33 @@ async function startStdioServer() {
     arch: process.arch,
   });
 
+  const configuration = getConfiguration();
+  const requiredCredentialKeys = ['clickupApiKey', 'clickupTeamId'] as const;
+  try {
+    validateConfig(configuration);
+  } catch (validationError) {
+    const missing = requiredCredentialKeys.filter((key) => !configuration[key]);
+    error('Missing required configuration', {
+      missing,
+      message: validationError instanceof Error ? validationError.message : String(validationError)
+    });
+    process.exit(1);
+  }
+
   // Detect and log configuration source
-  const keySource = process.env.CLICKUP_API_KEY ? "environment variable" : "config input";
-  const teamSource = process.env.CLICKUP_TEAM_ID ? "environment variable" : "config input";
+  const keySource = config.credentialSources.clickupApiKey;
+  const teamSource = config.credentialSources.clickupTeamId;
   info('Configuration source', {
     clickupApiKey: keySource,
     clickupTeamId: teamSource
   });
 
-  if (!process.env.CLICKUP_API_KEY || !process.env.CLICKUP_TEAM_ID) {
-    error("Missing required configuration", {
-      missing: [
-        !process.env.CLICKUP_API_KEY && "CLICKUP_API_KEY",
-        !process.env.CLICKUP_TEAM_ID && "CLICKUP_TEAM_ID"
-      ].filter(Boolean)
-    });
-    process.exit(1);
+  // Backfill process.env for downstream consumers that still rely on it
+  if (!process.env.CLICKUP_API_KEY) {
+    process.env.CLICKUP_API_KEY = configuration.clickupApiKey;
+  }
+  if (!process.env.CLICKUP_TEAM_ID) {
+    process.env.CLICKUP_TEAM_ID = configuration.clickupTeamId;
   }
 
   // Configure the server with all handlers

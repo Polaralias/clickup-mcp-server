@@ -17,7 +17,11 @@ startCommand:
   commandFunction: |-
     (config) => ({
       command: 'node',
-      args: ['build/index.js'],
+      args: [
+        'build/index.js',
+        '--env', `CLICKUP_API_KEY=${config.clickupApiKey}`,
+        '--env', `CLICKUP_TEAM_ID=${config.clickupTeamId}`
+      ],
       env: {
         CLICKUP_API_KEY: config.clickupApiKey,
         CLICKUP_TEAM_ID: config.clickupTeamId
