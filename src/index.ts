@@ -32,6 +32,15 @@ import config from './config.js';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { startSSEServer } from './sse_server.js';
+import { z } from 'zod';
+
+// =============================
+// MCP Configuration Schema
+// =============================
+export const configSchema = z.object({
+  clickupApiKey: z.string().describe("Your ClickUp API key."),
+  clickupTeamId: z.string().describe("Your ClickUp Team ID.")
+});
 
 // Get directory name for module paths
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,7 +52,7 @@ process.on('uncaughtException', (err) => {
 });
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   error("Unhandled Rejection", { reason });
   process.exit(1);
 });
@@ -51,13 +60,31 @@ process.on('unhandledRejection', (reason, promise) => {
 async function startStdioServer() {
   info('Starting ClickUp MCP Server...');
 
-  // Log essential information about the environment
+  // Log essential environment information
   info('Server environment', {
     pid: process.pid,
     node: process.version,
     os: process.platform,
     arch: process.arch,
   });
+
+  // Detect and log configuration source
+  const keySource = process.env.CLICKUP_API_KEY ? "environment variable" : "config input";
+  const teamSource = process.env.CLICKUP_TEAM_ID ? "environment variable" : "config input";
+  info('Configuration source', {
+    clickupApiKey: keySource,
+    clickupTeamId: teamSource
+  });
+
+  if (!process.env.CLICKUP_API_KEY || !process.env.CLICKUP_TEAM_ID) {
+    error("Missing required configuration", {
+      missing: [
+        !process.env.CLICKUP_API_KEY && "CLICKUP_API_KEY",
+        !process.env.CLICKUP_TEAM_ID && "CLICKUP_TEAM_ID"
+      ].filter(Boolean)
+    });
+    process.exit(1);
+  }
 
   // Configure the server with all handlers
   info('Configuring server request handlers');
@@ -96,4 +123,3 @@ main().catch((err) => {
   error("Unhandled server error", { message: err.message, stack: err.stack });
   process.exit(1);
 });
-
