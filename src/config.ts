@@ -38,6 +38,8 @@ for (let i = 0; i < args.length; i++) {
     if (key === "SSE_PORT") envArgs.ssePort = value;
     if (key === "ENABLE_STDIO") envArgs.enableStdio = value;
     if (key === "PORT") envArgs.port = value;
+    if (key === "HOST") envArgs.host = value;
+    if (key === "HTTPS_HOST") envArgs.httpsHost = value;
     i++;
   }
 }
@@ -99,6 +101,8 @@ interface Config {
   ssePort: number;
   enableStdio: boolean;
   port?: string;
+  host: string;
+  httpsHost?: string;
   // Security configuration (opt-in for backwards compatibility)
   enableSecurityFeatures: boolean;
   enableOriginValidation: boolean;
@@ -185,6 +189,8 @@ export const getConfiguration = (): Config => {
       true
     ),
     port: envArgs.port || process.env.PORT || "3231",
+    host: envArgs.host || process.env.HOST || "0.0.0.0",
+    httpsHost: envArgs.httpsHost || process.env.HTTPS_HOST,
     // Security configuration (opt-in for backwards compatibility)
     enableSecurityFeatures: parseBoolean(
       process.env.ENABLE_SECURITY_FEATURES,
@@ -269,6 +275,9 @@ const config = {
   get port() {
     return getConfiguration().port;
   },
+  get host() {
+    return getConfiguration().host;
+  },
   get enableSecurityFeatures() {
     return getConfiguration().enableSecurityFeatures;
   },
@@ -298,6 +307,9 @@ const config = {
   },
   get httpsPort() {
     return getConfiguration().httpsPort;
+  },
+  get httpsHost() {
+    return getConfiguration().httpsHost;
   },
   get sslKeyPath() {
     return getConfiguration().sslKeyPath;
