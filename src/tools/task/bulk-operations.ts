@@ -9,8 +9,9 @@
  */
 
 import { TaskPriority } from '../../services/clickup/types.js';
-import { clickUpServices } from '../../services/shared.js';
+import { getTaskService } from '../../services/shared.js';
 import { BulkService } from '../../services/clickup/bulk.js';
+import { TaskService } from '../../services/clickup/task/task-service.js';
 import { parseDueDate } from '../utils.js';
 import { 
   validateBulkTasks, 
@@ -24,8 +25,18 @@ import { getTaskId } from './handlers.js';
 import { BatchProcessingOptions } from '../../utils/concurrency-utils.js';
 
 // Initialize services
-const { task: taskService } = clickUpServices;
-const bulkService = new BulkService(taskService);
+const taskService = () => getTaskService();
+
+let bulkServiceInstance: BulkService | null = null;
+let bulkServiceTaskRef: TaskService | null = null;
+const getBulkService = () => {
+  const currentTaskService = taskService();
+  if (!bulkServiceInstance || bulkServiceTaskRef !== currentTaskService) {
+    bulkServiceInstance = new BulkService(currentTaskService);
+    bulkServiceTaskRef = currentTaskService;
+  }
+  return bulkServiceInstance;
+};
 
 //=============================================================================
 // COMMON SCHEMA DEFINITIONS

@@ -14,11 +14,11 @@ import { createReadStream } from 'fs';
 import { Stream } from 'stream';
 import { IncomingMessage, request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
-import { 
-  ClickUpTask, 
-  ClickUpTaskAttachment 
+import {
+  ClickUpTask,
+  ClickUpTaskAttachment
 } from '../../services/clickup/types.js';
-import { clickUpServices } from '../../services/shared.js';
+import { getTaskService } from '../../services/shared.js';
 import { 
   ChunkSession, 
   TaskAttachmentResponse, 
@@ -29,8 +29,8 @@ import { validateTaskIdentification } from './utilities.js';
 import { sponsorService } from '../../utils/sponsor-service.js';
 import { Logger } from '../../logger.js';
 
-// Use shared services instance
-const { task: taskService } = clickUpServices;
+// Helper accessor for the shared task service
+const taskService = () => getTaskService();
 
 // Create a logger instance for attachments
 const logger = new Logger('TaskAttachments');
@@ -133,7 +133,7 @@ async function attachTaskFileHandler(params: any): Promise<any> {
   }
   
   // Resolve task ID
-  const result = await taskService.findTasks({
+  const result = await taskService().findTasks({
     taskId,
     taskName,
     listName,
@@ -201,7 +201,7 @@ async function attachTaskFileHandler(params: any): Promise<any> {
 async function handleDirectUpload(taskId: string, fileName: string, fileBuffer: Buffer): Promise<TaskAttachmentResponse> {
   try {
     // Call service method
-    const result = await taskService.uploadTaskAttachment(taskId, fileBuffer, fileName);
+    const result = await taskService().uploadTaskAttachment(taskId, fileBuffer, fileName);
     
     return {
       success: true,
@@ -222,7 +222,7 @@ async function handleUrlUpload(taskId: string, fileUrl: string, fileName: string
     const extractedFileName = fileName || new URL(fileUrl).pathname.split('/').pop() || 'downloaded-file';
     
     // Call service method
-    const result = await taskService.uploadTaskAttachmentFromUrl(taskId, fileUrl, extractedFileName, authHeader);
+    const result = await taskService().uploadTaskAttachmentFromUrl(taskId, fileUrl, extractedFileName, authHeader);
     
     return {
       success: true,
@@ -315,7 +315,7 @@ async function handleChunkUpload(
     
     try {
       // Call service method
-      const result = await taskService.uploadTaskAttachment(session.taskId, fileData, session.fileName);
+      const result = await taskService().uploadTaskAttachment(session.taskId, fileData, session.fileName);
       
       // Clean up the session
       chunkSessions.delete(sessionToken);

@@ -8,7 +8,6 @@
  */
 
 import { Logger } from '../logger.js';
-import { clickUpServices } from '../services/shared.js';
 
 // Re-export date utilities
 export { 

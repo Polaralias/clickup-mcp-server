@@ -12,7 +12,7 @@ import { TaskService } from './task/index.js';
 import { ClickUpTask, CreateTaskData, UpdateTaskData } from './types.js';
 import { BatchProcessingOptions, BatchResult, processBatch } from '../../utils/concurrency-utils.js';
 import { ClickUpServiceError, ErrorCode } from './base.js';
-import { clickUpServices } from '../shared.js';
+import { getWorkspaceService } from '../shared.js';
 import { findListIDByName } from '../../tools/list.js';
 
 // Create logger instance
@@ -192,7 +192,7 @@ export class BulkService {
       // assume it's a list name and try to resolve it
       if (!/^\d+$/.test(targetListId)) {
         logger.info(`Target list appears to be a name: "${targetListId}", attempting to resolve`);
-        const listInfo = await findListIDByName(clickUpServices.workspace, targetListId);
+        const listInfo = await findListIDByName(getWorkspaceService(), targetListId);
         if (!listInfo) {
           throw new ClickUpServiceError(
             `Target list "${targetListId}" not found`,

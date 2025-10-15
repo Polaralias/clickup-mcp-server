@@ -8,16 +8,17 @@
  * updating, and deleting folders in the ClickUp workspace hierarchy.
  */
 
-import { 
-  CreateFolderData, 
+import {
+  CreateFolderData,
   ClickUpFolder
 } from '../services/clickup/types.js';
-import { clickUpServices } from '../services/shared.js';
+import { getFolderService, getWorkspaceService } from '../services/shared.js';
 import config from '../config.js';
 import { sponsorService } from '../utils/sponsor-service.js';
 
 // Use shared services instance
-const { folder: folderService, workspace: workspaceService } = clickUpServices;
+const folderService = () => getFolderService();
+const workspaceService = () => getWorkspaceService();
 
 /**
  * Tool definition for creating a folder
@@ -163,7 +164,7 @@ export async function handleCreateFolder(parameters: any) {
   
   // If no spaceId but spaceName is provided, look up the space ID
   if (!targetSpaceId && spaceName) {
-    const spaceIdResult = await workspaceService.findSpaceByName(spaceName);
+    const spaceIdResult = await workspaceService().findSpaceByName(spaceName);
     if (!spaceIdResult) {
       throw new Error(`Space "${spaceName}" not found`);
     }
@@ -184,7 +185,7 @@ export async function handleCreateFolder(parameters: any) {
 
   try {
     // Create the folder
-    const newFolder = await folderService.createFolder(targetSpaceId, folderData);
+    const newFolder = await folderService().createFolder(targetSpaceId, folderData);
     
     return sponsorService.createResponse({
       id: newFolder.id,
@@ -215,7 +216,7 @@ export async function handleGetFolder(parameters: any) {
     
     // If no spaceId provided but spaceName is, look up the space ID first
     if (!targetSpaceId && spaceName) {
-      const spaceIdResult = await workspaceService.findSpaceByName(spaceName);
+      const spaceIdResult = await workspaceService().findSpaceByName(spaceName);
       if (!spaceIdResult) {
         throw new Error(`Space "${spaceName}" not found`);
       }
@@ -226,7 +227,7 @@ export async function handleGetFolder(parameters: any) {
       throw new Error("Either spaceId or spaceName must be provided when using folderName");
     }
     
-    const folderResult = await folderService.findFolderByName(targetSpaceId, folderName);
+    const folderResult = await folderService().findFolderByName(targetSpaceId, folderName);
     if (!folderResult) {
       throw new Error(`Folder "${folderName}" not found in space`);
     }
@@ -239,7 +240,7 @@ export async function handleGetFolder(parameters: any) {
 
   try {
     // Get the folder
-    const folder = await folderService.getFolder(targetFolderId);
+    const folder = await folderService().getFolder(targetFolderId);
     
     return sponsorService.createResponse({
       id: folder.id,
@@ -269,7 +270,7 @@ export async function handleUpdateFolder(parameters: any) {
     
     // If no spaceId provided but spaceName is, look up the space ID first
     if (!targetSpaceId && spaceName) {
-      const spaceIdResult = await workspaceService.findSpaceByName(spaceName);
+      const spaceIdResult = await workspaceService().findSpaceByName(spaceName);
       if (!spaceIdResult) {
         throw new Error(`Space "${spaceName}" not found`);
       }
@@ -280,7 +281,7 @@ export async function handleUpdateFolder(parameters: any) {
       throw new Error("Either spaceId or spaceName must be provided when using folderName");
     }
     
-    const folderResult = await folderService.findFolderByName(targetSpaceId, folderName);
+    const folderResult = await folderService().findFolderByName(targetSpaceId, folderName);
     if (!folderResult) {
       throw new Error(`Folder "${folderName}" not found in space`);
     }
@@ -303,7 +304,7 @@ export async function handleUpdateFolder(parameters: any) {
 
   try {
     // Update the folder
-    const updatedFolder = await folderService.updateFolder(targetFolderId, updateData);
+    const updatedFolder = await folderService().updateFolder(targetFolderId, updateData);
     
     return sponsorService.createResponse({
       id: updatedFolder.id,
@@ -334,7 +335,7 @@ export async function handleDeleteFolder(parameters: any) {
     
     // If no spaceId provided but spaceName is, look up the space ID first
     if (!targetSpaceId && spaceName) {
-      const spaceIdResult = await workspaceService.findSpaceByName(spaceName);
+      const spaceIdResult = await workspaceService().findSpaceByName(spaceName);
       if (!spaceIdResult) {
         throw new Error(`Space "${spaceName}" not found`);
       }
@@ -345,7 +346,7 @@ export async function handleDeleteFolder(parameters: any) {
       throw new Error("Either spaceId or spaceName must be provided when using folderName");
     }
     
-    const folderResult = await folderService.findFolderByName(targetSpaceId, folderName);
+    const folderResult = await folderService().findFolderByName(targetSpaceId, folderName);
     if (!folderResult) {
       throw new Error(`Folder "${folderName}" not found in space`);
     }
@@ -358,11 +359,11 @@ export async function handleDeleteFolder(parameters: any) {
 
   try {
     // Get folder details before deletion for confirmation message
-    const folder = await folderService.getFolder(targetFolderId);
+    const folder = await folderService().getFolder(targetFolderId);
     const folderName = folder.name;
     
     // Delete the folder
-    await folderService.deleteFolder(targetFolderId);
+    await folderService().deleteFolder(targetFolderId);
     
     return sponsorService.createResponse({
       success: true,

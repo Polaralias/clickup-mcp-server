@@ -64,8 +64,8 @@ import {
 } from './index.js';
 
 // Import shared services
-import { clickUpServices } from '../../services/shared.js';
-const { task: taskService } = clickUpServices;
+import { getTaskService } from '../../services/shared.js';
+const taskService = () => getTaskService();
 
 import { BatchResult } from '../../utils/concurrency-utils.js';
 import { ClickUpTask } from '../../services/clickup/types.js';
@@ -107,7 +107,7 @@ export const handleGetTasks = createHandlerWrapper(getTasksHandler, (tasks) => (
  */
 export async function handleUpdateTask(parameters: any) {
   try {
-    const result = await updateTaskHandler(taskService, parameters);
+    const result = await updateTaskHandler(parameters);
     return sponsorService.createResponse(formatTaskData(result), true);
   } catch (error) {
     return sponsorService.createErrorResponse(error instanceof Error ? error.message : String(error));
@@ -179,7 +179,7 @@ export const handleDeleteBulkTasks = createHandlerWrapper(deleteBulkTasksHandler
 
 export const handleGetWorkspaceTasks = createHandlerWrapper(
   // This adapts the new handler signature to match what createHandlerWrapper expects
-  (params) => getWorkspaceTasksHandler(taskService, params),
+  (params) => getWorkspaceTasksHandler(params),
   (response) => response // Pass through the response as is
 );
 

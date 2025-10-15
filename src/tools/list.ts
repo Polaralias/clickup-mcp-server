@@ -9,11 +9,11 @@
  * and in folders.
  */
 
-import { 
-  CreateListData, 
+import {
+  CreateListData,
   ClickUpList
 } from '../services/clickup/types.js';
-import { listService, workspaceService } from '../services/shared.js';
+import { getListService, getWorkspaceService } from '../services/shared.js';
 import config from '../config.js';
 import { sponsorService } from '../utils/sponsor-service.js';
 
@@ -183,14 +183,17 @@ export const deleteListTool = {
   }
 };
 
+const listService = () => getListService();
+const workspaceService = () => getWorkspaceService();
+
 /**
  * Helper function to find a list ID by name
  * Uses the ClickUp service's global list search functionality
  */
-export async function findListIDByName(workspaceService: any, listName: string): Promise<{ id: string; name: string } | null> {
+export async function findListIDByName(service: any, listName: string): Promise<{ id: string; name: string } | null> {
   // Use workspace service to find the list in the hierarchy
-  const hierarchy = await workspaceService.getWorkspaceHierarchy();
-  const listInfo = workspaceService.findIDByNameInHierarchy(hierarchy, listName, 'list');
+  const hierarchy = await service.getWorkspaceHierarchy();
+  const listInfo = service.findIDByNameInHierarchy(hierarchy, listName, 'list');
   if (!listInfo) return null;
   return { id: listInfo.id, name: listName };
 }
@@ -211,7 +214,7 @@ export async function handleCreateList(parameters: any) {
   
   // If no spaceId but spaceName is provided, look up the space ID
   if (!targetSpaceId && spaceName) {
-    const spaceIdResult = await workspaceService.findSpaceIDByName(spaceName);
+    const spaceIdResult = await workspaceService().findSpaceIDByName(spaceName);
     if (!spaceIdResult) {
       throw new Error(`Space "${spaceName}" not found`);
     }
@@ -236,7 +239,7 @@ export async function handleCreateList(parameters: any) {
 
   try {
     // Create the list
-    const newList = await listService.createList(targetSpaceId, listData);
+    const newList = await listService().createList(targetSpaceId, listData);
     
     return sponsorService.createResponse({
       id: newList.id,
@@ -274,7 +277,7 @@ export async function handleCreateListInFolder(parameters: any) {
     
     // If no spaceId provided but spaceName is, look up the space ID first
     if (!targetSpaceId && spaceName) {
-      const spaceIdResult = await workspaceService.findSpaceByName(spaceName);
+      const spaceIdResult = await workspaceService().findSpaceByName(spaceName);
       if (!spaceIdResult) {
         throw new Error(`Space "${spaceName}" not found`);
       }
@@ -286,8 +289,8 @@ export async function handleCreateListInFolder(parameters: any) {
     }
     
     // Find the folder in the workspace hierarchy
-    const hierarchy = await workspaceService.getWorkspaceHierarchy();
-    const folderInfo = workspaceService.findIDByNameInHierarchy(hierarchy, folderName, 'folder');
+    const hierarchy = await workspaceService().getWorkspaceHierarchy();
+    const folderInfo = workspaceService().findIDByNameInHierarchy(hierarchy, folderName, 'folder');
     if (!folderInfo) {
       throw new Error(`Folder "${folderName}" not found in space`);
     }
@@ -309,7 +312,7 @@ export async function handleCreateListInFolder(parameters: any) {
 
   try {
     // Create the list in the folder
-    const newList = await listService.createListInFolder(targetFolderId, listData);
+    const newList = await listService().createListInFolder(targetFolderId, listData);
     
     return sponsorService.createResponse({
       id: newList.id,
@@ -342,7 +345,7 @@ export async function handleGetList(parameters: any) {
   
   // If no listId provided but listName is, look up the list ID
   if (!targetListId && listName) {
-    const listResult = await findListIDByName(workspaceService, listName);
+    const listResult = await findListIDByName(workspaceService(), listName);
     if (!listResult) {
       throw new Error(`List "${listName}" not found`);
     }
@@ -355,7 +358,7 @@ export async function handleGetList(parameters: any) {
 
   try {
     // Get the list
-    const list = await listService.getList(targetListId);
+    const list = await listService().getList(targetListId);
     
     return sponsorService.createResponse({
       id: list.id,
@@ -383,7 +386,7 @@ export async function handleUpdateList(parameters: any) {
   
   // If no listId provided but listName is, look up the list ID
   if (!targetListId && listName) {
-    const listResult = await findListIDByName(workspaceService, listName);
+    const listResult = await findListIDByName(workspaceService(), listName);
     if (!listResult) {
       throw new Error(`List "${listName}" not found`);
     }
@@ -407,7 +410,7 @@ export async function handleUpdateList(parameters: any) {
 
   try {
     // Update the list
-    const updatedList = await listService.updateList(targetListId, updateData);
+    const updatedList = await listService().updateList(targetListId, updateData);
     
     return sponsorService.createResponse({
       id: updatedList.id,
@@ -436,7 +439,7 @@ export async function handleDeleteList(parameters: any) {
   
   // If no listId provided but listName is, look up the list ID
   if (!targetListId && listName) {
-    const listResult = await findListIDByName(workspaceService, listName);
+    const listResult = await findListIDByName(workspaceService(), listName);
     if (!listResult) {
       throw new Error(`List "${listName}" not found`);
     }
@@ -449,11 +452,11 @@ export async function handleDeleteList(parameters: any) {
 
   try {
     // Get list details before deletion for confirmation message
-    const list = await listService.getList(targetListId);
+    const list = await listService().getList(targetListId);
     const listName = list.name;
     
     // Delete the list
-    await listService.deleteList(targetListId);
+    await listService().deleteList(targetListId);
     
     return sponsorService.createResponse({
       success: true,

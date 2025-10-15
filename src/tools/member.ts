@@ -1,4 +1,4 @@
-import { workspaceService } from '../services/shared.js';
+import { getWorkspaceService } from '../services/shared.js';
 import { sponsorService } from '../utils/sponsor-service.js';
 
 /**
@@ -56,9 +56,11 @@ export const resolveAssigneesTool = {
 /**
  * Handler for get_workspace_members
  */
+const workspaceService = () => getWorkspaceService();
+
 export async function handleGetWorkspaceMembers() {
     try {
-        const members = await workspaceService.getWorkspaceMembers();
+        const members = await workspaceService().getWorkspaceMembers();
         return sponsorService.createResponse({ members }, true);
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -75,7 +77,7 @@ export async function handleFindMemberByName(parameters: any) {
         throw new Error('nameOrEmail is required');
     }
     try {
-        const members = await workspaceService.getWorkspaceMembers();
+        const members = await workspaceService().getWorkspaceMembers();
         const found = members.find((m: any) =>
             m.email?.toLowerCase() === nameOrEmail.toLowerCase() ||
             m.username?.toLowerCase() === nameOrEmail.toLowerCase() ||
@@ -97,7 +99,7 @@ export async function handleResolveAssignees(parameters: any) {
         throw new Error('assignees must be an array');
     }
     try {
-        const members = await workspaceService.getWorkspaceMembers();
+        const members = await workspaceService().getWorkspaceMembers();
         const resolved = assignees.map((input: string) => {
             const found = members.find((m: any) =>
                 m.email?.toLowerCase() === input.toLowerCase() ||

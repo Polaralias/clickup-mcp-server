@@ -12,13 +12,13 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { WorkspaceTree, WorkspaceNode } from '../services/clickup/types.js';
 import { Logger } from '../logger.js';
 import { sponsorService } from '../utils/sponsor-service.js';
-import { clickUpServices } from '../services/shared.js';
+import { getWorkspaceService } from '../services/shared.js';
 
 // Create a logger for workspace tools
 const logger = new Logger('WorkspaceTool');
 
-// Use the workspace service from the shared services
-const { workspace: workspaceService } = clickUpServices;
+// Helper accessor so we always read the latest workspace service instance
+const workspaceService = () => getWorkspaceService();
 
 /**
  * Tool definition for retrieving the complete workspace hierarchy
@@ -38,7 +38,7 @@ export const workspaceHierarchyTool: Tool = {
 export async function handleGetWorkspaceHierarchy() {
   try {
     // Get workspace hierarchy from the workspace service
-    const hierarchy = await workspaceService.getWorkspaceHierarchy();
+    const hierarchy = await workspaceService().getWorkspaceHierarchy();
     
     // Generate tree representation
     const treeOutput = formatTreeOutput(hierarchy);
