@@ -57,6 +57,43 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
+const requiredCredentialKeys = ['clickupApiKey', 'clickupTeamId'] as const;
+
+type Configuration = ReturnType<typeof getConfiguration>;
+
+function validateAndPrepareConfiguration(): Configuration {
+  const configuration = getConfiguration();
+
+  try {
+    validateConfig(configuration);
+  } catch (validationError) {
+    const missing = requiredCredentialKeys.filter((key) => !configuration[key]);
+    error('Missing required configuration', {
+      missing,
+      message: validationError instanceof Error ? validationError.message : String(validationError),
+    });
+    process.exit(1);
+  }
+
+  // Detect and log configuration source
+  const keySource = config.credentialSources.clickupApiKey;
+  const teamSource = config.credentialSources.clickupTeamId;
+  info('Configuration source', {
+    clickupApiKey: keySource,
+    clickupTeamId: teamSource,
+  });
+
+  // Backfill process.env for downstream consumers that still rely on it
+  if (!process.env.CLICKUP_API_KEY) {
+    process.env.CLICKUP_API_KEY = configuration.clickupApiKey;
+  }
+  if (!process.env.CLICKUP_TEAM_ID) {
+    process.env.CLICKUP_TEAM_ID = configuration.clickupTeamId;
+  }
+
+  return configuration;
+}
+
 async function startStdioServer() {
   info('Starting ClickUp MCP Server...');
 
@@ -67,35 +104,6 @@ async function startStdioServer() {
     os: process.platform,
     arch: process.arch,
   });
-
-  const configuration = getConfiguration();
-  const requiredCredentialKeys = ['clickupApiKey', 'clickupTeamId'] as const;
-  try {
-    validateConfig(configuration);
-  } catch (validationError) {
-    const missing = requiredCredentialKeys.filter((key) => !configuration[key]);
-    error('Missing required configuration', {
-      missing,
-      message: validationError instanceof Error ? validationError.message : String(validationError)
-    });
-    process.exit(1);
-  }
-
-  // Detect and log configuration source
-  const keySource = config.credentialSources.clickupApiKey;
-  const teamSource = config.credentialSources.clickupTeamId;
-  info('Configuration source', {
-    clickupApiKey: keySource,
-    clickupTeamId: teamSource
-  });
-
-  // Backfill process.env for downstream consumers that still rely on it
-  if (!process.env.CLICKUP_API_KEY) {
-    process.env.CLICKUP_API_KEY = configuration.clickupApiKey;
-  }
-  if (!process.env.CLICKUP_TEAM_ID) {
-    process.env.CLICKUP_TEAM_ID = configuration.clickupTeamId;
-  }
 
   // Configure the server with all handlers
   info('Configuring server request handlers');
@@ -114,7 +122,9 @@ async function startStdioServer() {
  */
 async function main() {
   try {
-    if (config.enableSSE) {
+    const configuration = validateAndPrepareConfiguration();
+
+    if (configuration.enableSSE) {
       // Start the new SSE server with HTTP Streamable support
       startSSEServer();
     } else {
