@@ -57,7 +57,9 @@
   "homepage": "https://github.com/taazkareem/clickup-mcp-server#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.3",
+    "@smithery/sdk": "^1.6.8",
     "axios": "^1.6.7",
+    "chalk": "^5.6.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
