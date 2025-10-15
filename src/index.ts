@@ -141,5 +141,5 @@ export default async function createServer({
 
   const { configureServer, server } = await import('./server.js');
   await configureServer();
-  return (server as unknown as { server: McpServer }).server;
+  return server as unknown as McpServer;
 }
