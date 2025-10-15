@@ -25,13 +25,9 @@
  */
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { configureServer, server } from './server.js';
-import { clickUpServices } from './services/shared.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { info, error } from './logger.js';
-import config, { getConfiguration, validateConfig } from './config.js';
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { startSSEServer } from './sse_server.js';
+import config, { getConfiguration, initializeConfiguration, validateConfig } from './config.js';
 import { z } from 'zod';
 
 // =============================
@@ -41,9 +37,6 @@ export const configSchema = z.object({
   clickupApiKey: z.string().describe("Your ClickUp API key."),
   clickupTeamId: z.string().describe("Your ClickUp Team ID.")
 });
-
-// Get directory name for module paths
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -90,15 +83,12 @@ async function startStdioServer() {
   });
 
   // Backfill process.env for downstream consumers that still rely on it
-  if (!process.env.CLICKUP_API_KEY) {
-    process.env.CLICKUP_API_KEY = configuration.clickupApiKey;
-  }
-  if (!process.env.CLICKUP_TEAM_ID) {
-    process.env.CLICKUP_TEAM_ID = configuration.clickupTeamId;
-  }
+  process.env.CLICKUP_API_KEY = configuration.clickupApiKey;
+  process.env.CLICKUP_TEAM_ID = configuration.clickupTeamId;
 
   // Configure the server with all handlers
   info('Configuring server request handlers');
+  const { configureServer, server } = await import('./server.js');
   await configureServer();
 
   // Connect using stdio transport
@@ -116,6 +106,7 @@ async function main() {
   try {
     if (config.enableSSE) {
       // Start the new SSE server with HTTP Streamable support
+      const { startSSEServer } = await import('./sse_server.js');
       startSSEServer();
     } else {
       // Start the traditional STDIO server
@@ -134,3 +125,21 @@ main().catch((err) => {
   error("Unhandled server error", { message: err.message, stack: err.stack });
   process.exit(1);
 });
+
+export default async function createServer({
+  config: sessionConfig,
+}: {
+  config: z.infer<typeof configSchema>;
+}): Promise<McpServer> {
+  const runtimeConfig = initializeConfiguration({
+    clickupApiKey: sessionConfig.clickupApiKey,
+    clickupTeamId: sessionConfig.clickupTeamId,
+  });
+
+  process.env.CLICKUP_API_KEY = runtimeConfig.clickupApiKey;
+  process.env.CLICKUP_TEAM_ID = runtimeConfig.clickupTeamId;
+
+  const { configureServer, server } = await import('./server.js');
+  await configureServer();
+  return (server as unknown as { server: McpServer }).server;
+}

@@ -45,7 +45,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 // Track where credential values were resolved from to assist logging elsewhere
-const credentialSources = {
+const credentialSources: Record<'clickupApiKey' | 'clickupTeamId', string> = {
   clickupApiKey: envArgs.clickupApiKey
     ? "cli --env argument"
     : process.env.CLICKUP_API_KEY
@@ -151,77 +151,105 @@ const parseOrigins = (
     .filter((origin) => origin !== "");
 };
 
+const pickFirst = <T>(...values: (T | undefined | null)[]): T | undefined => {
+  for (const value of values) {
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
 // Load configuration from command line args or environment variables lazily
 let _configuration: Config | null = null;
+
+const buildConfiguration = (overrides: Partial<Config> = {}): Config => ({
+  clickupApiKey: overrides.clickupApiKey ?? envArgs.clickupApiKey ?? process.env.CLICKUP_API_KEY ?? "",
+  clickupTeamId: overrides.clickupTeamId ?? envArgs.clickupTeamId ?? process.env.CLICKUP_TEAM_ID ?? "",
+  enableSponsorMessage: overrides.enableSponsorMessage ?? process.env.ENABLE_SPONSOR_MESSAGE !== "false",
+  documentSupport:
+    overrides.documentSupport ??
+    envArgs.documentSupport ??
+    process.env.DOCUMENT_SUPPORT ??
+    process.env.DOCUMENT_MODULE ??
+    process.env.DOCUMENT_MODEL ??
+    "false",
+  logLevel: overrides.logLevel ?? parseLogLevel(pickFirst(envArgs.logLevel, process.env.LOG_LEVEL)),
+  disabledTools:
+    overrides.disabledTools ??
+    (() => {
+      const source = pickFirst(envArgs.disabledTools, process.env.DISABLED_TOOLS, process.env.DISABLED_COMMANDS);
+      return source
+        ?.split(",")
+        .map((cmd) => cmd.trim())
+        .filter((cmd) => cmd !== "") ?? [];
+    })(),
+  enabledTools:
+    overrides.enabledTools ??
+    (() => {
+      const source = pickFirst(envArgs.enabledTools, process.env.ENABLED_TOOLS);
+      return source
+        ?.split(",")
+        .map((cmd) => cmd.trim())
+        .filter((cmd) => cmd !== "") ?? [];
+    })(),
+  enableSSE: overrides.enableSSE ?? parseBoolean(pickFirst(envArgs.enableSSE, process.env.ENABLE_SSE), false),
+  ssePort: overrides.ssePort ?? parseInteger(pickFirst(envArgs.ssePort, process.env.SSE_PORT), 3000),
+  enableStdio: overrides.enableStdio ?? parseBoolean(
+    pickFirst(envArgs.enableStdio, process.env.ENABLE_STDIO),
+    true
+  ),
+  port: overrides.port ?? envArgs.port ?? process.env.PORT ?? "3231",
+  host: overrides.host ?? envArgs.host ?? process.env.HOST ?? "0.0.0.0",
+  httpsHost: overrides.httpsHost ?? envArgs.httpsHost ?? process.env.HTTPS_HOST,
+  // Security configuration (opt-in for backwards compatibility)
+  enableSecurityFeatures: overrides.enableSecurityFeatures ?? parseBoolean(
+    process.env.ENABLE_SECURITY_FEATURES,
+    false
+  ),
+  enableOriginValidation: overrides.enableOriginValidation ?? parseBoolean(
+    process.env.ENABLE_ORIGIN_VALIDATION,
+    false
+  ),
+  enableRateLimit: overrides.enableRateLimit ?? parseBoolean(process.env.ENABLE_RATE_LIMIT, false),
+  enableCors: overrides.enableCors ?? parseBoolean(process.env.ENABLE_CORS, false),
+  allowedOrigins: overrides.allowedOrigins ?? parseOrigins(process.env.ALLOWED_ORIGINS, [
+    "http://127.0.0.1:3231",
+    "http://localhost:3231",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "https://127.0.0.1:3443",
+    "https://localhost:3443",
+    "https://127.0.0.1:3231",
+    "https://localhost:3231",
+  ]),
+  rateLimitMax: overrides.rateLimitMax ?? parseInteger(process.env.RATE_LIMIT_MAX, 100),
+  rateLimitWindowMs: overrides.rateLimitWindowMs ?? parseInteger(process.env.RATE_LIMIT_WINDOW_MS, 60000),
+  maxRequestSize: overrides.maxRequestSize ?? process.env.MAX_REQUEST_SIZE ?? "10mb",
+  // HTTPS configuration
+  enableHttps: overrides.enableHttps ?? parseBoolean(process.env.ENABLE_HTTPS, false),
+  httpsPort: overrides.httpsPort ?? process.env.HTTPS_PORT ?? "3443",
+  sslKeyPath: overrides.sslKeyPath ?? process.env.SSL_KEY_PATH,
+  sslCertPath: overrides.sslCertPath ?? process.env.SSL_CERT_PATH,
+  sslCaPath: overrides.sslCaPath ?? process.env.SSL_CA_PATH,
+});
 
 export const getConfiguration = (): Config => {
   if (_configuration) return _configuration;
 
-  _configuration = {
-    clickupApiKey: envArgs.clickupApiKey || process.env.CLICKUP_API_KEY || "",
-    clickupTeamId: envArgs.clickupTeamId || process.env.CLICKUP_TEAM_ID || "",
-    enableSponsorMessage: process.env.ENABLE_SPONSOR_MESSAGE !== "false",
-    documentSupport:
-      envArgs.documentSupport ||
-      process.env.DOCUMENT_SUPPORT ||
-      process.env.DOCUMENT_MODULE ||
-      process.env.DOCUMENT_MODEL ||
-      "false",
-    logLevel: parseLogLevel(envArgs.logLevel || process.env.LOG_LEVEL),
-    disabledTools:
-      (
-        envArgs.disabledTools ||
-        process.env.DISABLED_TOOLS ||
-        process.env.DISABLED_COMMANDS
-      )
-        ?.split(",")
-        .map((cmd) => cmd.trim())
-        .filter((cmd) => cmd !== "") || [],
-    enabledTools:
-      (envArgs.enabledTools || process.env.ENABLED_TOOLS)
-        ?.split(",")
-        .map((cmd) => cmd.trim())
-        .filter((cmd) => cmd !== "") || [],
-    enableSSE: parseBoolean(envArgs.enableSSE || process.env.ENABLE_SSE, false),
-    ssePort: parseInteger(envArgs.ssePort || process.env.SSE_PORT, 3000),
-    enableStdio: parseBoolean(
-      envArgs.enableStdio || process.env.ENABLE_STDIO,
-      true
-    ),
-    port: envArgs.port || process.env.PORT || "3231",
-    host: envArgs.host || process.env.HOST || "0.0.0.0",
-    httpsHost: envArgs.httpsHost || process.env.HTTPS_HOST,
-    // Security configuration (opt-in for backwards compatibility)
-    enableSecurityFeatures: parseBoolean(
-      process.env.ENABLE_SECURITY_FEATURES,
-      false
-    ),
-    enableOriginValidation: parseBoolean(
-      process.env.ENABLE_ORIGIN_VALIDATION,
-      false
-    ),
-    enableRateLimit: parseBoolean(process.env.ENABLE_RATE_LIMIT, false),
-    enableCors: parseBoolean(process.env.ENABLE_CORS, false),
-    allowedOrigins: parseOrigins(process.env.ALLOWED_ORIGINS, [
-      "http://127.0.0.1:3231",
-      "http://localhost:3231",
-      "http://127.0.0.1:3000",
-      "http://localhost:3000",
-      "https://127.0.0.1:3443",
-      "https://localhost:3443",
-      "https://127.0.0.1:3231",
-      "https://localhost:3231",
-    ]),
-    rateLimitMax: parseInteger(process.env.RATE_LIMIT_MAX, 100),
-    rateLimitWindowMs: parseInteger(process.env.RATE_LIMIT_WINDOW_MS, 60000),
-    maxRequestSize: process.env.MAX_REQUEST_SIZE || "10mb",
-    // HTTPS configuration
-    enableHttps: parseBoolean(process.env.ENABLE_HTTPS, false),
-    httpsPort: process.env.HTTPS_PORT || "3443",
-    sslKeyPath: process.env.SSL_KEY_PATH,
-    sslCertPath: process.env.SSL_CERT_PATH,
-    sslCaPath: process.env.SSL_CA_PATH,
-  };
+  _configuration = buildConfiguration();
+  return _configuration;
+};
+
+export const initializeConfiguration = (overrides: Partial<Config>): Config => {
+  _configuration = buildConfiguration(overrides);
+
+  if (overrides.clickupApiKey !== undefined) {
+    credentialSources.clickupApiKey = "session config";
+  }
+  if (overrides.clickupTeamId !== undefined) {
+    credentialSources.clickupTeamId = "session config";
+  }
 
   return _configuration;
 };
