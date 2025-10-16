@@ -12,7 +12,7 @@ COPY --from=uv /uv /bin/uv
 RUN if [ -f "uv.lock" ]; then \
         echo "Using uv with uv.lock" && \
         export UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy && \
-        uv sync --locked --no-dev; \
+        (uv sync --locked --no-dev || (echo "uv sync --locked failed, retrying without lock" && uv sync --no-dev)); \
     elif [ -f "poetry.lock" ]; then \
         echo "Using poetry with poetry.lock" && \
         export PYTHONUNBUFFERED=1 \ \
