@@ -78,10 +78,24 @@ class TaskService(BaseClickUpService):
     # ------------------------------------------------------------------
     # Comments & attachments
     # ------------------------------------------------------------------
-    async def get_task_comments(self, identifier: TaskIdentifier) -> List[Dict[str, Any]]:
+    async def get_task_comments(
+        self,
+        identifier: TaskIdentifier,
+        *,
+        start: Optional[int] = None,
+        start_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         task_id = await self._resolve_task_id(identifier)
+        params: Dict[str, Any] = {}
+        if start is not None:
+            params["start"] = start
+        if start_id is not None:
+            params["start_id"] = start_id
+
         response = await self.make_request(
-            lambda: self.client.request("GET", f"/task/{task_id}/comment")
+            lambda: self.client.request(
+                "GET", f"/task/{task_id}/comment", params=params or None
+            )
         )
         return list(response.get("comments", [])) if isinstance(response, dict) else []
 

@@ -234,22 +234,11 @@ def create_server() -> FastMCP:
         start = start if start is not None else kwargs.get("start")
         start_id = start_id or kwargs.get("startId")
         identifier = await _resolve_task_identifier(task_id, custom_task_id, task_name, list_name, space_name)
-        comments = await get_task_service().get_task_comments(identifier)
-        if start is not None or start_id is not None:
-            start_ts = _safe_int(start) if start is not None else None
-            start_identifier = str(start_id) if start_id is not None else None
-            comments = [
-                comment
-                for comment in comments
-                if (
-                    start_ts is None
-                    or _safe_int(comment.get("date")) >= start_ts
-                )
-                and (
-                    start_identifier is None
-                    or str(comment.get("id")) >= start_identifier
-                )
-            ]
+        comments = await get_task_service().get_task_comments(
+            identifier,
+            start=start,
+            start_id=start_id,
+        )
         return {"comments": comments, "count": len(comments)}
 
     @register_tool("create_task_comment", "Add a comment to a task.")
