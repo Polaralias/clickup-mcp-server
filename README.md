@@ -27,6 +27,8 @@ A Model Context Protocol (MCP) server for integrating ClickUp tasks with AI appl
 
 The server is hosted on [Smithery](https://smithery.ai/server/@taazkareem/clickup-mcp-server). There, you can preview the available tools or copy the commands to run on your specific client app.
 
+> **Deployment tip:** When configuring the server in Smithery, make sure the `CLICKUP_API_KEY` and `CLICKUP_TEAM_ID` secrets do not include any leading or trailing whitespace. The server trims these values automatically, but blank entries will cause the deployment "inspect server" step to respond with the `-32001` authentication error.
+
 ## NPX Installation
 
 [![NPM Version](https://img.shields.io/npm/v/@taazkareem/clickup-mcp-server.svg?style=flat&logo=npm)](https://www.npmjs.com/package/@taazkareem/clickup-mcp-server)

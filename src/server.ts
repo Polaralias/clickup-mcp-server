@@ -230,9 +230,17 @@ export function configureServer() {
     });
 
     if (!config.clickupApiKey || !config.clickupTeamId) {
-      const message = "ClickUp credentials are not configured. Please provide CLICKUP_API_KEY and CLICKUP_TEAM_ID before invoking tools.";
+      const missing: string[] = [];
+      if (!config.clickupApiKey) missing.push("CLICKUP_API_KEY");
+      if (!config.clickupTeamId) missing.push("CLICKUP_TEAM_ID");
+
+      const message = missing.length === 2
+        ? "ClickUp credentials are not configured. Provide both CLICKUP_API_KEY and CLICKUP_TEAM_ID in your Smithery deployment settings before invoking tools."
+        : `ClickUp credential ${missing[0]} is not configured. Update your Smithery deployment settings before invoking tools.`;
+
       logger.warn("Blocking tool execution due to missing credentials", {
-        tool: name
+        tool: name,
+        missing
       });
       throw {
         code: -32001,

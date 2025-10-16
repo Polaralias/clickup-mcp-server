@@ -163,9 +163,21 @@ const pickFirst = <T>(...values: (T | undefined | null)[]): T | undefined => {
 // Load configuration from command line args or environment variables lazily
 let _configuration: Config | null = null;
 
+const sanitizeSecret = (value: string | undefined): string => {
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  return value.trim();
+};
+
 const buildConfiguration = (overrides: Partial<Config> = {}): Config => ({
-  clickupApiKey: overrides.clickupApiKey ?? envArgs.clickupApiKey ?? process.env.CLICKUP_API_KEY ?? "",
-  clickupTeamId: overrides.clickupTeamId ?? envArgs.clickupTeamId ?? process.env.CLICKUP_TEAM_ID ?? "",
+  clickupApiKey: sanitizeSecret(
+    overrides.clickupApiKey ?? envArgs.clickupApiKey ?? process.env.CLICKUP_API_KEY
+  ),
+  clickupTeamId: sanitizeSecret(
+    overrides.clickupTeamId ?? envArgs.clickupTeamId ?? process.env.CLICKUP_TEAM_ID
+  ),
   enableSponsorMessage: overrides.enableSponsorMessage ?? process.env.ENABLE_SPONSOR_MESSAGE !== "false",
   documentSupport:
     overrides.documentSupport ??
