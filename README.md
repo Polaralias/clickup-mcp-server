@@ -10,7 +10,8 @@ A Model Context Protocol (MCP) server for integrating ClickUp tasks with AI appl
 
 ## Requirements
 
-- **Node.js v18.0.0 or higher** (required for MCP SDK compatibility)
+- **Python 3.10 or higher**
+- [uv](https://github.com/astral-sh/uv) for dependency management (recommended)
 - ClickUp API key and Team ID
 
 ## Setup
@@ -18,7 +19,7 @@ A Model Context Protocol (MCP) server for integrating ClickUp tasks with AI appl
 1. Get your credentials:
    - ClickUp API key from [ClickUp Settings](https://app.clickup.com/settings/apps)
    - Team ID from your ClickUp workspace URL
-2. Choose either hosted installation (sends webhooks) or NPX installation (downloads to local path and installs dependencies)
+2. Choose either the hosted Smithery deployment or install locally with Python and `uv`
 3. Use natural language to manage your workspace!
 
 ## Smithery Installation (Quick Start)
@@ -29,11 +30,10 @@ The server is hosted on [Smithery](https://smithery.ai/server/@taazkareem/clicku
 
 > **Deployment tip:** When configuring the server in Smithery, make sure the `CLICKUP_API_KEY` and `CLICKUP_TEAM_ID` secrets do not include any leading or trailing whitespace. The server trims these values automatically, but blank entries will cause the deployment "inspect server" step to respond with the `-32001` authentication error.
 
-## NPX Installation
+## Python Installation
 
-[![NPM Version](https://img.shields.io/npm/v/@taazkareem/clickup-mcp-server.svg?style=flat&logo=npm)](https://www.npmjs.com/package/@taazkareem/clickup-mcp-server)
-[![Dependency Status](https://img.shields.io/badge/dependencies-up%20to%20date-brightgreen)](https://github.com/TaazKareem/clickup-mcp-server/blob/main/package.json)
-[![NPM Downloads](https://img.shields.io/npm/dm/@taazkareem/clickup-mcp-server.svg?style=flat&logo=npm)](https://npmcharts.com/compare/@taazkareem/clickup-mcp-server?minimal=true)
+The MCP server is now published as a Python package. You can run it directly with
+[`uv`](https://github.com/astral-sh/uv) or any Python environment manager.
 
 Add this entry to your client's MCP settings JSON file:
 
@@ -41,10 +41,12 @@ Add this entry to your client's MCP settings JSON file:
 {
   "mcpServers": {
     "ClickUp": {
-      "command": "npx",
+      "command": "uv",
       "args": [
-        "-y",
-        "@taazkareem/clickup-mcp-server@latest"
+        "run",
+        "python",
+        "-m",
+        "smithery.cli.start"
       ],
       "env": {
         "CLICKUP_API_KEY": "your-api-key",
@@ -56,11 +58,15 @@ Add this entry to your client's MCP settings JSON file:
 }
 ```
 
-Or use this npx command:
+Or use this `uv` command locally:
 
-`npx -y @taazkareem/clickup-mcp-server@latest --env CLICKUP_API_KEY=your-api-key --env CLICKUP_TEAM_ID=your-team-id`
+```bash
+uv run python -m smithery.cli.start \
+  --env CLICKUP_API_KEY=your-api-key \
+  --env CLICKUP_TEAM_ID=your-team-id
+```
 
-**Obs: if you don't pass "DOCUMENT_SUPPORT": "true", the default is false and document support will not be active.**
+> **Note:** If you omit `DOCUMENT_SUPPORT=true` the document tools remain disabled.
 
 ### Tool Filtering
 
@@ -94,7 +100,7 @@ export DISABLED_TOOLS="delete_task,delete_bulk_tasks"
 **Example:**
 ```bash
 # Only enable task creation and reading tools
-npx -y @taazkareem/clickup-mcp-server@latest \
+uv run python -m smithery.cli.start \
   --env CLICKUP_API_KEY=your-api-key \
   --env CLICKUP_TEAM_ID=your-team-id \
   --env ENABLED_TOOLS=create_task,get_task,get_workspace_hierarchy
@@ -110,10 +116,12 @@ The server supports both modern **HTTP Streamable** transport (MCP Inspector com
 {
   "mcpServers": {
     "ClickUp": {
-      "command": "npx",
+      "command": "uv",
       "args": [
-        "-y",
-        "@taazkareem/clickup-mcp-server@latest"
+        "run",
+        "python",
+        "-m",
+        "smithery.cli.start"
       ],
       "env": {
         "CLICKUP_API_KEY": "your-api-key",
@@ -133,7 +141,11 @@ The server supports both modern **HTTP Streamable** transport (MCP Inspector com
 ### Command Line Usage
 
 ```bash
-npx -y @taazkareem/clickup-mcp-server@latest --env CLICKUP_API_KEY=your-api-key --env CLICKUP_TEAM_ID=your-team-id --env ENABLE_SSE=true --env PORT=3231
+uv run python -m smithery.cli.start \
+  --env CLICKUP_API_KEY=your-api-key \
+  --env CLICKUP_TEAM_ID=your-team-id \
+  --env ENABLE_SSE=true \
+  --env PORT=3231
 ```
 
 Available configuration options:
@@ -166,7 +178,7 @@ ENABLE_ORIGIN_VALIDATION=true \
 ENABLE_RATE_LIMIT=true \
 SSL_KEY_PATH=./ssl/server.key \
 SSL_CERT_PATH=./ssl/server.crt \
-npx @taazkareem/clickup-mcp-server@latest --env CLICKUP_API_KEY=your-key --env CLICKUP_TEAM_ID=your-team --env ENABLE_SSE=true
+uv run python -m smithery.cli.start --env CLICKUP_API_KEY=your-key --env CLICKUP_TEAM_ID=your-team --env ENABLE_SSE=true
 ```
 
 **HTTPS Endpoints:**
@@ -193,7 +205,7 @@ An example SSE client is provided in the `examples` directory. To run it:
 
 ```bash
 # Start the server with SSE enabled
-ENABLE_SSE=true PORT=3231 npx -y @taazkareem/clickup-mcp-server@latest --env CLICKUP_API_KEY=your-api-key --env CLICKUP_TEAM_ID=your-team-id
+ENABLE_SSE=true PORT=3231 uv run python -m smithery.cli.start --env CLICKUP_API_KEY=your-api-key --env CLICKUP_TEAM_ID=your-team-id
 
 # In another terminal, run the example client
 cd examples

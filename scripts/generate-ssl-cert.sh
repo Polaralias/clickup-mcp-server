@@ -25,7 +25,7 @@ openssl req -new -key "$CERT_DIR/server.key" -out "$CERT_DIR/server.csr" -subj "
 # Generate self-signed certificate
 echo "📝 Generating self-signed certificate..."
 openssl x509 -req -in "$CERT_DIR/server.csr" -signkey "$CERT_DIR/server.key" -out "$CERT_DIR/server.crt" -days $DAYS -extensions v3_req -extfile <(
-cat <<EOF
+  cat <<'CERT'
 [v3_req]
 keyUsage = keyEncipherment, dataEncipherment
 extendedKeyUsage = serverAuth
@@ -35,7 +35,7 @@ subjectAltName = @alt_names
 DNS.1 = localhost
 DNS.2 = 127.0.0.1
 IP.1 = 127.0.0.1
-EOF
+CERT
 )
 
 # Set appropriate permissions
@@ -46,28 +46,35 @@ chmod 644 "$CERT_DIR/server.crt"
 rm "$CERT_DIR/server.csr"
 
 echo "✅ SSL certificates generated successfully!"
-echo ""
+echo
+
 echo "📁 Certificate files created:"
 echo "   Private Key: $CERT_DIR/server.key"
 echo "   Certificate: $CERT_DIR/server.crt"
-echo ""
+echo
+
 echo "🔒 SECURITY NOTICE:"
 echo "   These certificates are machine-specific and should NOT be committed to git."
 echo "   The ssl/ directory is already in .gitignore to prevent accidental commits."
-echo ""
+echo
+
 echo "🚀 To use HTTPS with your ClickUp MCP Server:"
-echo ""
+echo
+
 echo "   export ENABLE_HTTPS=true"
 echo "   export SSL_KEY_PATH=$CERT_DIR/server.key"
 echo "   export SSL_CERT_PATH=$CERT_DIR/server.crt"
-echo ""
+echo
+
 echo "   Then start your server normally:"
-echo "   CLICKUP_API_KEY=your-key CLICKUP_TEAM_ID=your-team ENABLE_SSE=true npx @taazkareem/clickup-mcp-server@latest"
-echo ""
+echo "   CLICKUP_API_KEY=your-key CLICKUP_TEAM_ID=your-team ENABLE_SSE=true uv run python -m smithery.cli.start"
+echo
+
 echo "⚠️  Note: These are self-signed certificates for development only."
 echo "   Browsers will show security warnings that you'll need to accept."
 echo "   For production, use certificates from a trusted Certificate Authority."
-echo ""
+echo
+
 echo "🔗 Your HTTPS endpoints will be:"
 echo "   • https://127.0.0.1:3443/mcp (Streamable HTTPS)"
 echo "   • https://127.0.0.1:3443/sse (Legacy SSE HTTPS)"
