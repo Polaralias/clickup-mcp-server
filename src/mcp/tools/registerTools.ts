@@ -5,8 +5,18 @@ import { CHARACTER_LIMIT, PROJECT_NAME } from "../../config/constants.js";
 import type { RuntimeConfig } from "../../config/runtime.js";
 import { err, ok, Result } from "../../shared/Result.js";
 import { DocSearchInput, DocSearchOutput, BulkDocSearchInput, BulkDocSearchOutput } from "./schemas/doc.js";
+import {
+  TaskFuzzySearchInput,
+  TaskFuzzySearchOutput,
+  BulkTaskFuzzySearchInput,
+  BulkTaskFuzzySearchOutput
+} from "./schemas/taskSearch.js";
+import type { TaskScopeType } from "./schemas/taskSearch.js";
 import { DocSearch } from "../../application/usecases/DocSearch.js";
 import { BulkDocSearch } from "../../application/usecases/BulkDocSearch.js";
+import { TaskSearchIndex, type TaskIndexRecord } from "../../application/services/TaskSearchIndex.js";
+import { TaskFuzzySearch } from "../../application/usecases/TaskFuzzySearch.js";
+import { BulkTaskFuzzySearch } from "../../application/usecases/BulkTaskFuzzySearch.js";
 import { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../../shared/KV.js";
 import { HttpClient } from "../../infrastructure/http/HttpClient.js";
@@ -27,6 +37,10 @@ type ToolDependencies = { gateway?: ClickUpGateway; cache?: ApiCache };
 
 type DocSearchOutputType = z.infer<typeof DocSearchOutput>;
 type BulkDocSearchOutputType = z.infer<typeof BulkDocSearchOutput>;
+type TaskFuzzySearchInputType = z.infer<typeof TaskFuzzySearchInput>;
+type TaskFuzzySearchOutputType = z.infer<typeof TaskFuzzySearchOutput>;
+type BulkTaskFuzzySearchInputType = z.infer<typeof BulkTaskFuzzySearchInput>;
+type BulkTaskFuzzySearchOutputType = z.infer<typeof BulkTaskFuzzySearchOutput>;
 
 const require = createRequire(import.meta.url);
 const packageMetadata = require("../../../package.json") as PackageMetadata;
@@ -81,6 +95,52 @@ const bulkDocSearchInputJsonSchema: JsonSchema = {
   additionalProperties: false
 };
 
+const taskScopeJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    spaceIds: { type: "array", items: { type: "string" }, maxItems: 50 },
+    listIds: { type: "array", items: { type: "string" }, maxItems: 50 },
+    assigneeIds: { type: "array", items: { type: "integer" }, maxItems: 50 },
+    statuses: { type: "array", items: { type: "string" }, maxItems: 50 },
+    includeClosed: { type: "boolean" },
+    updatedSince: { type: "string", format: "date-time" }
+  },
+  required: [],
+  additionalProperties: false
+};
+
+const taskFuzzySearchInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    query: { type: "string", minLength: 1 },
+    scope: taskScopeJsonSchema,
+    limit: { type: "integer", minimum: 1, maximum: 50, default: 20 }
+  },
+  required: ["query"],
+  additionalProperties: false
+};
+
+const bulkTaskFuzzySearchInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    queries: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, maxItems: 25 },
+    scope: taskScopeJsonSchema,
+    options: {
+      type: "object",
+      properties: {
+        limit: { type: "integer", minimum: 1, maximum: 50 },
+        concurrency: { type: "integer", minimum: 1, maximum: 10 }
+      },
+      required: [],
+      additionalProperties: false,
+      default: {}
+    }
+  },
+  required: ["queries"],
+  additionalProperties: false
+};
+
 type HealthPayload = {
   service: string;
   version: string;
@@ -115,6 +175,111 @@ function resolveGatewayConfig(): ClickUpGatewayConfig {
   const timeoutMs = parseNumber(process.env.CLICKUP_TIMEOUT_MS, 10000);
   const defaultTeamId = parseNumber(process.env.CLICKUP_DEFAULT_TEAM_ID, 0);
   return { baseUrl, token, authScheme, timeoutMs, defaultTeamId };
+}
+
+function toOptionalString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return undefined;
+}
+
+function toStringOrEmpty(value: unknown): string {
+  const result = toOptionalString(value);
+  return result ?? "";
+}
+
+function toOptionalId(value: unknown): string | undefined {
+  const result = toOptionalString(value);
+  if (!result || result.length === 0) {
+    return undefined;
+  }
+  return result;
+}
+
+function extractComments(value: unknown): string | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const parts: string[] = [];
+  for (const entry of value) {
+    const record = entry as Record<string, unknown> | null | undefined;
+    const text = record?.text ?? record?.comment;
+    if (typeof text === "string" && text.length > 0) {
+      parts.push(text);
+    }
+  }
+  if (parts.length === 0) {
+    return undefined;
+  }
+  return parts.join("\n");
+}
+
+function extractCustom(value: unknown): string | undefined {
+  if (typeof value === "undefined") {
+    return undefined;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    void error;
+    return undefined;
+  }
+}
+
+function extractAssignees(value: unknown): TaskIndexRecord["assignees"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const result: TaskIndexRecord["assignees"] = [];
+  for (const entry of value) {
+    const record = entry as Record<string, unknown> | null | undefined;
+    const idNumber = Number(record?.id);
+    if (!Number.isFinite(idNumber)) {
+      continue;
+    }
+    const username = typeof record?.username === "string" ? record.username : undefined;
+    result.push({ id: Math.trunc(idNumber), username });
+  }
+  return result;
+}
+
+function extractUpdatedAt(value: unknown): string | undefined {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "bigint") {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+      return new Date(numeric).toISOString();
+    }
+  }
+  return undefined;
+}
+
+function mapTaskRecord(task: unknown): TaskIndexRecord {
+  const record = task as Record<string, unknown> | null | undefined;
+  const listRecord = record?.list as Record<string, unknown> | null | undefined;
+  const spaceRecord = record?.space as Record<string, unknown> | null | undefined;
+  const descriptionSource = record?.description ?? record?.text_content;
+  const updatedSource = record?.date_updated ?? record?.dateUpdated ?? record?.updated_at ?? record?.updatedAt;
+  const assignees = extractAssignees(record?.assignees);
+  return {
+    taskId: String(record?.id ?? record?.task_id ?? ""),
+    name: toOptionalString(record?.name),
+    description: toOptionalString(descriptionSource),
+    comments: extractComments(record?.comments),
+    custom: extractCustom(record?.custom_fields),
+    listId: toOptionalId(listRecord?.id ?? record?.list_id),
+    listName: toOptionalString(listRecord?.name),
+    spaceId: toOptionalId(spaceRecord?.id ?? record?.space_id),
+    spaceName: toOptionalString(spaceRecord?.name),
+    status: toOptionalString(record?.status),
+    priority: toOptionalString(record?.priority),
+    assignees,
+    url: toStringOrEmpty(record?.url ?? record?.permalink ?? record?.link),
+    updatedAt: extractUpdatedAt(updatedSource)
+  };
 }
 
 function resolveDependencies(deps?: ToolDependencies): { gateway: ClickUpGateway; cache: ApiCache } {
@@ -160,6 +325,15 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const { gateway, cache } = resolveDependencies(deps);
   const docSearch = new DocSearch(gateway, cache);
   const bulkDocSearch = new BulkDocSearch(gateway, cache);
+  const taskLoader = async (scope?: unknown): Promise<TaskIndexRecord[]> => {
+    const typedScope = scope as TaskScopeType | undefined;
+    const rows = await gateway.fetch_tasks_for_index(typedScope);
+    const tasks = Array.isArray(rows) ? rows : [];
+    return tasks.map(mapTaskRecord);
+  };
+  const taskIndex = new TaskSearchIndex(taskLoader, 60);
+  const taskSearch = new TaskFuzzySearch(taskIndex, gateway);
+  const bulkTaskSearch = new BulkTaskFuzzySearch(taskSearch);
   const docTool: RegisteredTool<DocSearchOutputType> = {
     name: "clickup_doc_search",
     description: "Search ClickUp Docs by query with pagination",
@@ -176,6 +350,22 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: bulkDocSearchInputJsonSchema,
     execute: async (input, context) => bulkDocSearch.execute(context, input as z.infer<typeof BulkDocSearchInput>)
   };
+  const taskTool: RegisteredTool<TaskFuzzySearchOutputType> = {
+    name: "clickup_task_fuzzy_search",
+    description: "Fuzzy search tasks by text across titles, descriptions, comments and fields",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: TaskFuzzySearchInput,
+    inputJsonSchema: taskFuzzySearchInputJsonSchema,
+    execute: async (input, context) => taskSearch.execute(context, input as TaskFuzzySearchInputType)
+  };
+  const bulkTaskTool: RegisteredTool<BulkTaskFuzzySearchOutputType> = {
+    name: "clickup_bulk_task_fuzzy_search",
+    description: "Run multiple fuzzy task searches concurrently and merge unique tasks",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: BulkTaskFuzzySearchInput,
+    inputJsonSchema: bulkTaskFuzzySearchInputJsonSchema,
+    execute: async (input, context) => bulkTaskSearch.execute(context, input as BulkTaskFuzzySearchInputType)
+  };
   void runtime;
-  return [healthTool, docTool, bulkTool];
+  return [healthTool, docTool, bulkTool, taskTool, bulkTaskTool];
 }
