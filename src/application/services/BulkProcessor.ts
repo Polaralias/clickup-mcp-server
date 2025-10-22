@@ -57,7 +57,7 @@ export class BulkProcessor {
       exponentialBackoff: opts.exponentialBackoff ?? defaults.exponentialBackoff,
       continueOnError: opts.continueOnError ?? defaults.continueOnError
     };
-    const concurrencyLimit = options.continueOnError ? options.concurrency : 1;
+    const concurrencyLimit = options.concurrency;
     this.logger.info("batch_event", { event: "started", total });
     if (total === 0) {
       const durationMs = Date.now() - startTime;
