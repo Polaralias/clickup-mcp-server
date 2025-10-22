@@ -78,6 +78,27 @@ describe("BulkProcessor", () => {
     expect(finished[0].failed).toBe(0);
   });
 
+  it("honors requested concurrency before any failure when continueOnError is false", async () => {
+    const logger = createLogger("info");
+    const processor = new BulkProcessor(logger);
+    const started: number[] = [];
+    const items: WorkItem<number>[] = Array.from({ length: 4 }, (_, index) => {
+      return async () => {
+        started.push(index);
+        await new Promise<void>(resolve => setTimeout(resolve, 100));
+        return index;
+      };
+    });
+    const promise = processor.run(items, { concurrency: 3, retryCount: 0, continueOnError: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(started).toEqual([0, 1, 2]);
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(100);
+    const result = await promise;
+    expect(result.successful).toEqual([0, 1, 2, 3]);
+    expect(result.failed.length).toBe(0);
+  });
+
   it("retries on failure and succeeds", async () => {
     const logger = createLogger("info");
     const processor = new BulkProcessor(logger);
@@ -128,7 +149,7 @@ describe("BulkProcessor", () => {
         return 2;
       }
     ];
-    const promise = processor.run(items, { concurrency: 3, retryCount: 0, continueOnError: false });
+    const promise = processor.run(items, { concurrency: 2, retryCount: 0, continueOnError: false });
     await vi.advanceTimersByTimeAsync(100);
     const result = await promise;
     expect(result.total).toBe(3);
