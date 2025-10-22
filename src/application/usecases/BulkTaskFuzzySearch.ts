@@ -8,52 +8,12 @@ import {
 import { Result, ok, err } from "../../shared/Result.js";
 import { characterLimit } from "../../config/runtime.js";
 import { TaskFuzzySearch } from "./TaskFuzzySearch.js";
-
-type WorkItem<T> = () => Promise<T>;
-
-type BatchResult<T> = {
-  successful: { idx: number; data: T }[];
-  failed: { index: number; error: string }[];
-};
+import { BulkProcessor, type WorkItem } from "../services/BulkProcessor.js";
+import { createLogger } from "../../shared/Logger.js";
 
 type FailureCodeMap = Map<number, string | undefined>;
 
-type QueryResult = { index: number; query: string; output: TaskFuzzySearchOutputType };
-
-async function runBatch<T>(items: WorkItem<T>[], concurrency: number): Promise<BatchResult<T>> {
-  const successful: { idx: number; data: T }[] = [];
-  const failed: { index: number; error: string }[] = [];
-  if (items.length === 0) {
-    return { successful: [], failed: [] };
-  }
-  const workerCount = Math.max(1, Math.min(concurrency, items.length));
-  let cursor = 0;
-  const workers: Promise<void>[] = [];
-  const worker = async () => {
-    while (true) {
-      const current = cursor;
-      if (current >= items.length) {
-        return;
-      }
-      cursor += 1;
-      const task = items[current];
-      try {
-        const value = await task();
-        successful.push({ idx: current, data: value });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        failed.push({ index: current, error: message });
-      }
-    }
-  };
-  for (let i = 0; i < workerCount; i += 1) {
-    workers.push(worker());
-  }
-  await Promise.all(workers);
-  successful.sort((a, b) => a.idx - b.idx);
-  failed.sort((a, b) => a.index - b.index);
-  return { successful, failed };
-}
+type QuerySuccess = { index: number; q: string; out: TaskFuzzySearchOutputType };
 
 function normaliseQueries(values: string[]): string[] {
   const seen = new Set<string>();
@@ -165,10 +125,10 @@ function enforceLimit(out: BulkTaskFuzzySearchOutputType): void {
   out.guidance = "Output trimmed to character_limit";
 }
 
-function buildUnion(results: QueryResult[]): TaskHitType[] {
+function buildUnion(outputs: TaskFuzzySearchOutputType[]): TaskHitType[] {
   const map = new Map<string, { hit: TaskHitType; score: number; updatedAt: number }>();
-  for (const result of results) {
-    for (const hit of result.output.results) {
+  for (const output of outputs) {
+    for (const hit of output.results) {
       const key = hit.taskId;
       const currentScore = scoreValue(hit.score);
       const currentTime = timeValue(hit.updatedAt ?? null);
@@ -197,28 +157,36 @@ export class BulkTaskFuzzySearch {
     }
     const data = parsed.data;
     const limit = data.options.limit ?? 20;
-    const concurrency = Math.min(Math.max(data.options.concurrency ?? 5, 1), 10);
+    const concurrency = Math.min(Math.max(Math.trunc(data.options.concurrency ?? 5), 1), 10);
     const queries = normaliseQueries(data.queries);
     if (queries.length === 0) {
       const empty: BulkTaskFuzzySearchOutputType = { perQuery: {}, union: { results: [], dedupedCount: 0 }, failed: [] };
       return ok(empty, false);
     }
+    const logger = createLogger("info");
+    const processor = new BulkProcessor(logger);
     const failures: FailureCodeMap = new Map();
-    const workItems: WorkItem<QueryResult>[] = queries.map((query, index) => {
+    const workItems: WorkItem<QuerySuccess>[] = queries.map((query, index) => {
       return async () => {
         const result = await this.inner.execute(ctx, { query, scope: data.scope, limit });
         if (result.isError) {
           failures.set(index, result.code);
           throw new Error(result.message);
         }
-        return { index, query, output: result.data };
+        return { index, q: query, out: result.data };
       };
     });
-    const batch = await runBatch(workItems, concurrency);
-    const successes = batch.successful.map(entry => ({ index: entry.idx, query: entry.data.query, output: entry.data.output }));
+    const batch = await processor.run(workItems, {
+      concurrency,
+      retryCount: 0,
+      retryDelayMs: 200,
+      exponentialBackoff: true,
+      continueOnError: true
+    });
+    const successes = batch.successful;
     const perQuery: Record<string, TaskFuzzySearchOutputType> = {};
     for (const entry of successes) {
-      perQuery[entry.query] = entry.output;
+      perQuery[entry.q] = entry.out;
     }
     const failed = batch.failed.map(item => {
       const code = failures.get(item.index);
@@ -227,7 +195,7 @@ export class BulkTaskFuzzySearch {
       }
       return { query: queries[item.index], error: item.error };
     });
-    const unionResults = buildUnion(successes);
+    const unionResults = buildUnion(successes.map(entry => entry.out));
     const out: BulkTaskFuzzySearchOutputType = {
       perQuery,
       union: { results: unionResults, dedupedCount: unionResults.length },

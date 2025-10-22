@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import "./setup.js";
 import type { RuntimeConfig } from "../src/config/runtime.js";
@@ -54,7 +54,7 @@ describe("doc search tools", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
-    const data = result.data;
+    const data = result.data as any;
     expect(data.total).toBe(3);
     expect(data.page).toBe(0);
     expect(data.limit).toBe(1);
@@ -114,7 +114,7 @@ describe("doc search tools", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
-    const data = result.data;
+    const data = result.data as any;
     expect(Object.keys(data.perQuery).sort()).toEqual(["q1", "q2"]);
     expect(data.union.results.length).toBe(2);
     expect(data.union.dedupedCount).toBe(2);
@@ -159,9 +159,101 @@ describe("doc search tools", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
-    const data = result.data;
+    const data = result.data as any;
     expect(data.truncated).toBe(true);
     expect(typeof data.guidance).toBe("string");
     expect(data.guidance).toBe("Output trimmed to character_limit");
+  });
+
+  it("Bulk options map to processor retries", async () => {
+    let attempts = 0;
+    const gateway: GatewayStub = {
+      async search_docs(workspaceId, query, limit, page) {
+        expect(workspaceId).toBe(1);
+        expect(limit).toBe(10);
+        expect(page).toBe(0);
+        if (query === "retry") {
+          attempts += 1;
+          if (attempts === 1) {
+            throw new Error("temporary");
+          }
+          return {
+            total: 1,
+            items: [
+              {
+                doc_id: "D1",
+                page_id: "P1",
+                title: "Doc",
+                snippet: "content",
+                url: "u1",
+                score: 0.5,
+                updated_at: "2025-01-01T00:00:00.000Z"
+              }
+            ]
+          };
+        }
+        return { total: 0, items: [] };
+      },
+      async fetch_tasks_for_index() {
+        return [];
+      },
+      async get_task_by_id() {
+        return {};
+      }
+    };
+    const cache = new ApiCache(makeMemoryKV());
+    const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+    const tool = tools.find(entry => entry.name === "clickup_bulk_doc_search");
+    if (!tool) {
+      throw new Error("Tool not found");
+    }
+    const events: { event: string }[] = [];
+    const originalWrite = process.stderr.write;
+    process.stderr.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding | ((err?: Error | null) => void), cb?: (err?: Error | null) => void) => {
+      const text =
+        typeof chunk === "string"
+          ? chunk
+          : Buffer.from(chunk).toString(typeof encoding === "string" ? encoding : "utf8");
+      for (const line of text.split("\n")) {
+        if (!line) {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(line) as { msg?: string; event?: string };
+          if (parsed.msg === "batch_event" && typeof parsed.event === "string") {
+            events.push({ event: parsed.event });
+          }
+        } catch {}
+      }
+      const callback = typeof encoding === "function" ? encoding : cb;
+      if (callback) {
+        callback(null);
+      }
+      return true;
+    }) as unknown as typeof process.stderr.write;
+    try {
+      const promise = tool.execute(
+        {
+          workspaceId: 1,
+          queries: ["retry"],
+          options: { limit: 10, retryCount: 1, retryDelayMs: 200, exponentialBackoff: true, concurrency: 1 }
+        },
+        { server, runtime }
+      );
+      await vi.advanceTimersByTimeAsync(200);
+      const result = await promise;
+      expect(result.isError).toBe(false);
+      if (result.isError) {
+        throw new Error("Expected success result");
+      }
+      const data = result.data as any;
+      expect(Object.keys(data.perQuery)).toEqual(["retry"]);
+      expect(data.union.results.length).toBe(1);
+      expect(attempts).toBe(2);
+      const retried = events.filter(entry => entry.event === "retried");
+      expect(retried.length).toBe(1);
+    } finally {
+      process.stderr.write = originalWrite;
+    }
   });
 });
