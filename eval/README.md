@@ -1,0 +1,1 @@
+This directory provides a lightweight evaluation harness for ClickUp-MCP. To run manual evaluations, start the server with npm run dev, connect through an MCP-aware client, load the evaluation.sample.xml file and execute each task while capturing the tool calls and responses, and remember that every task is read-only so no ClickUp data is modified.

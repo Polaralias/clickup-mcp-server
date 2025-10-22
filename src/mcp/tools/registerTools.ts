@@ -12,6 +12,9 @@ import {
   BulkTaskFuzzySearchOutput
 } from "./schemas/taskSearch.js";
 import type { TaskScopeType } from "./schemas/taskSearch.js";
+import { CatalogueRequest, CatalogueOutput } from "./schemas/catalogue.js";
+import { buildCatalogue } from "./catalogue.js";
+import type { ToolDef } from "./catalogue.js";
 import { DocSearch } from "../../application/usecases/DocSearch.js";
 import { BulkDocSearch } from "../../application/usecases/BulkDocSearch.js";
 import { TaskSearchIndex, type TaskIndexRecord } from "../../application/services/TaskSearchIndex.js";
@@ -41,6 +44,7 @@ type TaskFuzzySearchInputType = z.infer<typeof TaskFuzzySearchInput>;
 type TaskFuzzySearchOutputType = z.infer<typeof TaskFuzzySearchOutput>;
 type BulkTaskFuzzySearchInputType = z.infer<typeof BulkTaskFuzzySearchInput>;
 type BulkTaskFuzzySearchOutputType = z.infer<typeof BulkTaskFuzzySearchOutput>;
+type CatalogueOutputType = z.infer<typeof CatalogueOutput>;
 
 const require = createRequire(import.meta.url);
 const packageMetadata = require("../../../package.json") as PackageMetadata;
@@ -56,6 +60,8 @@ export type RegisteredTool<TOutput = unknown> = {
 
 const healthInputSchema = z.object({}).strict();
 const healthInputJsonSchema: JsonSchema = { type: "object", properties: {}, required: [], additionalProperties: false };
+
+const catalogueInputJsonSchema: JsonSchema = { type: "object", properties: {}, required: [], additionalProperties: false };
 
 const docSearchInputJsonSchema: JsonSchema = {
   type: "object",
@@ -334,6 +340,12 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const taskIndex = new TaskSearchIndex(taskLoader, 60);
   const taskSearch = new TaskFuzzySearch(taskIndex, gateway);
   const bulkTaskSearch = new BulkTaskFuzzySearch(taskSearch);
+  const tools: RegisteredTool[] = [];
+  const register = <TOutput>(tool: RegisteredTool<TOutput>): RegisteredTool<TOutput> => {
+    tools.push(tool as RegisteredTool);
+    return tool;
+  };
+  register(healthTool);
   const docTool: RegisteredTool<DocSearchOutputType> = {
     name: "clickup_doc_search",
     description: "Search ClickUp Docs by query with pagination",
@@ -342,6 +354,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: docSearchInputJsonSchema,
     execute: async (input, context) => docSearch.execute(context, input as z.infer<typeof DocSearchInput>)
   };
+  register(docTool);
   const bulkTool: RegisteredTool<BulkDocSearchOutputType> = {
     name: "clickup_bulk_doc_search",
     description: "Run multiple doc searches concurrently and merge unique pages",
@@ -350,6 +363,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: bulkDocSearchInputJsonSchema,
     execute: async (input, context) => bulkDocSearch.execute(context, input as z.infer<typeof BulkDocSearchInput>)
   };
+  register(bulkTool);
   const taskTool: RegisteredTool<TaskFuzzySearchOutputType> = {
     name: "clickup_task_fuzzy_search",
     description: "Fuzzy search tasks by text across titles, descriptions, comments and fields",
@@ -358,6 +372,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: taskFuzzySearchInputJsonSchema,
     execute: async (input, context) => taskSearch.execute(context, input as TaskFuzzySearchInputType)
   };
+  register(taskTool);
   const bulkTaskTool: RegisteredTool<BulkTaskFuzzySearchOutputType> = {
     name: "clickup_bulk_task_fuzzy_search",
     description: "Run multiple fuzzy task searches concurrently and merge unique tasks",
@@ -366,6 +381,29 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: bulkTaskFuzzySearchInputJsonSchema,
     execute: async (input, context) => bulkTaskSearch.execute(context, input as BulkTaskFuzzySearchInputType)
   };
+  register(bulkTaskTool);
+  const catalogueTool: RegisteredTool<CatalogueOutputType> = {
+    name: "tool_catalogue",
+    description: "List all available tools with annotations and examples",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: CatalogueRequest,
+    inputJsonSchema: catalogueInputJsonSchema,
+    execute: async input => {
+      const parsed = CatalogueRequest.safeParse(input ?? {});
+      if (!parsed.success) {
+        return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
+      }
+      const toolDefs: ToolDef[] = tools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        annotations: tool.annotations
+      }));
+      const { payload } = buildCatalogue(PROJECT_NAME, packageMetadata.version, CHARACTER_LIMIT, toolDefs);
+      const output = CatalogueOutput.parse(payload);
+      return ok(output, output.truncated === true, output.guidance);
+    }
+  };
+  register(catalogueTool);
   void runtime;
-  return [healthTool, docTool, bulkTool, taskTool, bulkTaskTool];
+  return tools;
 }
