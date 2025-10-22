@@ -2,13 +2,11 @@ import { z } from "zod";
 import { BulkDocSearchInput, BulkDocSearchOutput, DocSearchInput, DocSearchOutput, DocSearchItem } from "../../mcp/tools/schemas/doc.js";
 import { Result, ok, err } from "../../shared/Result.js";
 import { characterLimit } from "../../config/runtime.js";
+import { BulkProcessor, type WorkItem } from "../services/BulkProcessor.js";
 import type { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway.js";
 import type { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import { DocSearch } from "./DocSearch.js";
-
-type WorkItem<T> = () => Promise<T>;
-
-type RunBatchResult<T> = { successful: T[]; failed: { index: number; error: string }[] };
+import { createLogger } from "../../shared/Logger.js";
 
 type DocSearchOutputType = z.infer<typeof DocSearchOutput>;
 type DocSearchItemType = z.infer<typeof DocSearchItem>;
@@ -17,42 +15,7 @@ type DocSearchInputType = z.infer<typeof DocSearchInput>;
 
 type FailureCodeMap = Map<number, string | undefined>;
 
-type QueryResult = { index: number; query: string; output: DocSearchOutputType };
-
-async function runBatch<T>(items: WorkItem<T>[], concurrency: number): Promise<RunBatchResult<T>> {
-  const results: { index: number; value: T }[] = [];
-  const failures: { index: number; error: string }[] = [];
-  if (items.length === 0) {
-    return { successful: [], failed: [] };
-  }
-  const workerCount = Math.max(1, Math.min(concurrency, items.length));
-  let cursor = 0;
-  const workers: Promise<void>[] = [];
-  const worker = async () => {
-    while (true) {
-      const index = cursor;
-      if (index >= items.length) {
-        return;
-      }
-      cursor += 1;
-      const task = items[index];
-      try {
-        const value = await task();
-        results.push({ index, value });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        failures.push({ index, error: message });
-      }
-    }
-  };
-  for (let i = 0; i < workerCount; i += 1) {
-    workers.push(worker());
-  }
-  await Promise.all(workers);
-  results.sort((a, b) => a.index - b.index);
-  failures.sort((a, b) => a.index - b.index);
-  return { successful: results.map(entry => entry.value), failed: failures };
-}
+type QuerySuccess = { index: number; q: string; out: DocSearchOutputType };
 
 function shortenField(items: DocSearchItemType[], field: "snippet" | "title"): boolean {
   let index = -1;
@@ -166,11 +129,11 @@ function makeKeyGenerator() {
   };
 }
 
-function buildUnion(results: QueryResult[]): DocSearchItemType[] {
+function buildUnion(outputs: DocSearchOutputType[]): DocSearchItemType[] {
   const selector = makeKeyGenerator();
   const map = new Map<string, { item: DocSearchItemType; score: number; updatedAt: number }>();
-  for (const record of results) {
-    for (const item of record.output.results) {
+  for (const output of outputs) {
+    for (const item of output.results) {
       const key = selector(item);
       const currentScore = scoreValue(item.score);
       const currentTime = timeValue(item.updatedAt ?? null);
@@ -222,14 +185,20 @@ export class BulkDocSearch {
     const data = parsed.data;
     const limit = data.options.limit ?? 20;
     const page = data.options.page ?? 0;
-    const concurrency = Math.min(Math.max(data.options.concurrency ?? 5, 1), 10);
+    const concurrency = Math.min(Math.max(Math.trunc(data.options.concurrency ?? 5), 1), 10);
+    const retryCount = Math.min(Math.max(Math.trunc(data.options.retryCount ?? 2), 0), 6);
+    const retryDelayMs = data.options.retryDelayMs ?? 200;
+    const exponentialBackoff = data.options.exponentialBackoff ?? true;
+    const continueOnError = data.options.continueOnError ?? true;
     const queries = normaliseQueries(data.queries);
     if (queries.length === 0) {
       const empty: BulkDocSearchOutputType = { perQuery: {}, union: { results: [], dedupedCount: 0 }, failed: [] };
       return ok(empty, false);
     }
+    const logger = createLogger("info");
+    const processor = new BulkProcessor(logger);
     const failures: FailureCodeMap = new Map();
-    const workItems: WorkItem<QueryResult>[] = queries.map((query, index) => {
+    const workItems: WorkItem<QuerySuccess>[] = queries.map((query, index) => {
       return async () => {
         const request: DocSearchInputType = { workspaceId: data.workspaceId, query, limit, page };
         const result = await this.docSearch.execute(ctx, request);
@@ -237,20 +206,26 @@ export class BulkDocSearch {
           failures.set(index, result.code);
           throw new Error(result.message);
         }
-        return { index, query, output: result.data };
+        return { index, q: query, out: result.data };
       };
     });
-    const batch = await runBatch(workItems, concurrency);
+    const batch = await processor.run(workItems, {
+      concurrency,
+      retryCount,
+      retryDelayMs,
+      exponentialBackoff,
+      continueOnError
+    });
     const successes = batch.successful;
     const perQuery: Record<string, DocSearchOutputType> = {};
     for (const entry of successes) {
-      perQuery[entry.query] = entry.output;
+      perQuery[entry.q] = entry.out;
     }
     const failed = batch.failed.map(item => {
       const code = failures.get(item.index);
       return code ? { query: queries[item.index], error: item.error, code } : { query: queries[item.index], error: item.error };
     });
-    const unionResults = buildUnion(successes);
+    const unionResults = buildUnion(successes.map(entry => entry.out));
     const out: BulkDocSearchOutputType = {
       perQuery,
       union: { results: unionResults, dedupedCount: unionResults.length },
