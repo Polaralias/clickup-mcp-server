@@ -222,4 +222,114 @@ export class ClickUpGateway {
     await this.cache.put(cacheKey, response.data, 60);
     return response.data;
   }
+
+  async create_task(listId: string, body: Record<string, unknown>): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/list/${listId}/task`),
+      headers: this.authHeader(),
+      json: body,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async move_task(taskId: string, targetListId: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/move`),
+      headers: this.authHeader(),
+      json: { list_id: targetListId },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async duplicate_task(taskId: string, include: Record<string, boolean>): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/duplicate`),
+      headers: this.authHeader(),
+      json: include,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async delete_task(taskId: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "DELETE",
+      url: this.buildUrl(`/api/v2/task/${taskId}`),
+      headers: this.authHeader(),
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async search_tasks(params: Record<string, unknown>): Promise<unknown> {
+    const query = { ...params };
+    const teamIdValue = query.teamId;
+    delete query.teamId;
+    let teamId = this.cfg.defaultTeamId;
+    if (typeof teamIdValue === "number" && Number.isFinite(teamIdValue)) {
+      teamId = Math.trunc(teamIdValue);
+    } else if (typeof teamIdValue === "string") {
+      const parsed = Number.parseInt(teamIdValue, 10);
+      if (!Number.isNaN(parsed)) {
+        teamId = parsed;
+      }
+    }
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/team/${teamId}/task`),
+      headers: this.authHeader(),
+      params: query,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async comment_task(taskId: string, markdown: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/comment`),
+      headers: this.authHeader(),
+      json: { markdown },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async attach_file_to_task(taskId: string, dataUri: string, name: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/attachment`),
+      headers: this.authHeader(),
+      json: { attachment: dataUri, filename: name },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async add_task_tags(taskId: string, tags: string[]): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/tag`),
+      headers: this.authHeader(),
+      json: { tags },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async remove_task_tags(taskId: string, tags: string[]): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/tag/remove`),
+      headers: this.authHeader(),
+      json: { tags },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
 }
