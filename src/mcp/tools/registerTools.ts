@@ -35,6 +35,19 @@ import {
 } from "./schemas/taskCrud.js";
 import { CatalogueRequest, CatalogueOutput } from "./schemas/catalogue.js";
 import { UpdateTaskInput, UpdateTaskOutput } from "./schemas/taskUpdate.js";
+import {
+  StartTimerInput,
+  StopTimerInput,
+  TimerOutput,
+  CreateEntryInput,
+  UpdateEntryInput,
+  DeleteEntryInput,
+  ListEntriesInput,
+  ListEntriesOutput,
+  ReportForTagInput,
+  ReportOutput,
+  ReportForContainerInput
+} from "./schemas/time.js";
 import { DocSearch } from "../../application/usecases/DocSearch.js";
 import { BulkDocSearch } from "../../application/usecases/BulkDocSearch.js";
 import { TaskSearchIndex, type TaskIndexRecord } from "../../application/services/TaskSearchIndex.js";
@@ -49,6 +62,14 @@ import { SearchTasks } from "../../application/usecases/tasks/SearchTasks.js";
 import { CommentTask } from "../../application/usecases/tasks/CommentTask.js";
 import { AttachFileToTask } from "../../application/usecases/tasks/AttachFileToTask.js";
 import { AddTagsToTask, RemoveTagsFromTask } from "../../application/usecases/tasks/Tags.js";
+import { StartTimer } from "../../application/usecases/time/StartTimer.js";
+import { StopTimer } from "../../application/usecases/time/StopTimer.js";
+import { CreateEntry } from "../../application/usecases/time/CreateEntry.js";
+import { UpdateEntry } from "../../application/usecases/time/UpdateEntry.js";
+import { DeleteEntry } from "../../application/usecases/time/DeleteEntry.js";
+import { ListEntries } from "../../application/usecases/time/ListEntries.js";
+import { ReportTimeForTag } from "../../application/usecases/time/ReportTimeForTag.js";
+import { ReportTimeForContainer } from "../../application/usecases/time/ReportTimeForContainer.js";
 import { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../../shared/KV.js";
 import { HttpClient } from "../../infrastructure/http/HttpClient.js";
@@ -101,6 +122,9 @@ type CommentTaskOutputType = z.infer<typeof CommentTaskOutput>;
 type AttachFileToTaskOutputType = z.infer<typeof AttachFileToTaskOutput>;
 type TagsOutputType = z.infer<typeof TagsOutput>;
 type CatalogueOutputType = z.infer<typeof CatalogueOutput>;
+type TimerOutputType = z.infer<typeof TimerOutput>;
+type ListEntriesOutputType = z.infer<typeof ListEntriesOutput>;
+type ReportOutputType = z.infer<typeof ReportOutput>;
 
 const require = createRequire(import.meta.url);
 const packageMetadata = require("../../../package.json") as PackageMetadata;
@@ -232,6 +256,117 @@ const deleteTaskInputJsonSchema: JsonSchema = {
     confirm: { type: "string", enum: ["yes"], default: "yes" }
   },
   required: ["taskId"],
+  additionalProperties: false
+};
+
+const startTimerInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    description: { type: "string" }
+  },
+  required: ["taskId"],
+  additionalProperties: false
+};
+
+const stopTimerInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 }
+  },
+  required: ["taskId"],
+  additionalProperties: false
+};
+
+const createTimeEntryInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    memberId: { type: "integer", minimum: 1 },
+    start: { type: "string", format: "date-time" },
+    end: { type: "string", format: "date-time" },
+    description: { type: "string" },
+    billable: { type: "boolean", default: false }
+  },
+  required: ["taskId", "start", "end"],
+  additionalProperties: false
+};
+
+const updateTimeEntryInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    entryId: { type: "string", minLength: 1 },
+    start: { type: "string", format: "date-time" },
+    end: { type: "string", format: "date-time" },
+    description: { type: "string" },
+    billable: { type: "boolean" }
+  },
+  required: ["entryId"],
+  additionalProperties: false
+};
+
+const deleteTimeEntryInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    entryId: { type: "string", minLength: 1 },
+    confirm: { type: "string", enum: ["yes"], default: "yes" }
+  },
+  required: ["entryId"],
+  additionalProperties: false
+};
+
+const listTimeEntriesInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    memberIds: { type: "array", items: { type: "integer", minimum: 1 }, maxItems: 50 },
+    taskIds: { type: "array", items: { type: "string" }, maxItems: 50 },
+    since: { type: "string", format: "date-time" },
+    until: { type: "string", format: "date-time" },
+    page: { type: "integer", minimum: 0, default: 0 },
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+    includeRunning: { type: "boolean", default: true },
+    includeBillable: { type: "boolean", default: true }
+  },
+  required: ["teamId"],
+  additionalProperties: false
+};
+
+const reportForTagInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    since: { type: "string", format: "date-time" },
+    until: { type: "string", format: "date-time" },
+    includeBillable: { type: "boolean", default: true },
+    memberIds: { type: "array", items: { type: "integer", minimum: 1 }, maxItems: 50 },
+    tag: { type: "string", minLength: 1 }
+  },
+  required: ["teamId", "tag"],
+  additionalProperties: false
+};
+
+const containerRefJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    containerType: { type: "string", enum: ["list", "view"] },
+    containerId: { type: "string", minLength: 1 }
+  },
+  required: ["containerType", "containerId"],
+  additionalProperties: false
+};
+
+const reportForContainerInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    since: { type: "string", format: "date-time" },
+    until: { type: "string", format: "date-time" },
+    includeBillable: { type: "boolean", default: true },
+    memberIds: { type: "array", items: { type: "integer", minimum: 1 }, maxItems: 50 },
+    ref: containerRefJsonSchema
+  },
+  required: ["teamId", "ref"],
   additionalProperties: false
 };
 
@@ -647,6 +782,14 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const attachFileUsecase = new AttachFileToTask(gateway);
   const addTagsUsecase = new AddTagsToTask(gateway);
   const removeTagsUsecase = new RemoveTagsFromTask(gateway);
+  const startTimerUsecase = new StartTimer(gateway);
+  const stopTimerUsecase = new StopTimer(gateway);
+  const createEntryUsecase = new CreateEntry(gateway);
+  const updateEntryUsecase = new UpdateEntry(gateway);
+  const deleteEntryUsecase = new DeleteEntry(gateway);
+  const listEntriesUsecase = new ListEntries(gateway);
+  const reportTagUsecase = new ReportTimeForTag(gateway);
+  const reportContainerUsecase = new ReportTimeForContainer(gateway);
   const taskLoader = async (scope?: unknown): Promise<TaskIndexRecord[]> => {
     const typedScope = scope as TaskScopeType | undefined;
     const rows = await gateway.fetch_tasks_for_index(typedScope);
@@ -770,6 +913,78 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     execute: async (input, context) => removeTagsUsecase.execute(context, input as z.infer<typeof RemoveTagsFromTaskInput>)
   };
   register(removeTagsTool);
+  const startTimerTool: RegisteredTool<TimerOutputType> = {
+    name: "clickup_start_timer",
+    description: "Start a running timer on a task",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: StartTimerInput,
+    inputJsonSchema: startTimerInputJsonSchema,
+    execute: async (input, context) => startTimerUsecase.execute(context, input as z.infer<typeof StartTimerInput>)
+  };
+  register(startTimerTool);
+  const stopTimerTool: RegisteredTool<TimerOutputType> = {
+    name: "clickup_stop_timer",
+    description: "Stop a running timer on a task",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: StopTimerInput,
+    inputJsonSchema: stopTimerInputJsonSchema,
+    execute: async (input, context) => stopTimerUsecase.execute(context, input as z.infer<typeof StopTimerInput>)
+  };
+  register(stopTimerTool);
+  const createEntryTool: RegisteredTool<TimerOutputType> = {
+    name: "clickup_create_time_entry",
+    description: "Create a manual time entry",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: CreateEntryInput,
+    inputJsonSchema: createTimeEntryInputJsonSchema,
+    execute: async (input, context) => createEntryUsecase.execute(context, input as z.infer<typeof CreateEntryInput>)
+  };
+  register(createEntryTool);
+  const updateEntryTool: RegisteredTool<TimerOutputType> = {
+    name: "clickup_update_time_entry",
+    description: "Update a manual time entry",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: UpdateEntryInput,
+    inputJsonSchema: updateTimeEntryInputJsonSchema,
+    execute: async (input, context) => updateEntryUsecase.execute(context, input as z.infer<typeof UpdateEntryInput>)
+  };
+  register(updateEntryTool);
+  const deleteEntryTool: RegisteredTool<TimerOutputType> = {
+    name: "clickup_delete_time_entry",
+    description: "Delete a manual time entry",
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
+    inputSchema: DeleteEntryInput,
+    inputJsonSchema: deleteTimeEntryInputJsonSchema,
+    execute: async (input, context) => deleteEntryUsecase.execute(context, input as z.infer<typeof DeleteEntryInput>)
+  };
+  register(deleteEntryTool);
+  const listEntriesTool: RegisteredTool<ListEntriesOutputType> = {
+    name: "clickup_list_time_entries",
+    description: "List time entries with filters and aggregates",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ListEntriesInput,
+    inputJsonSchema: listTimeEntriesInputJsonSchema,
+    execute: async (input, context) => listEntriesUsecase.execute(context, input as z.infer<typeof ListEntriesInput>)
+  };
+  register(listEntriesTool);
+  const reportTagTool: RegisteredTool<ReportOutputType> = {
+    name: "clickup_report_time_for_tag",
+    description: "Total time spent on tasks carrying a specific tag within a date window",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ReportForTagInput,
+    inputJsonSchema: reportForTagInputJsonSchema,
+    execute: async (input, context) => reportTagUsecase.execute(context, input as z.infer<typeof ReportForTagInput>)
+  };
+  register(reportTagTool);
+  const reportContainerTool: RegisteredTool<ReportOutputType> = {
+    name: "clickup_report_time_for_container",
+    description: "Total time spent on tasks inside a specific list or view within a date window",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ReportForContainerInput,
+    inputJsonSchema: reportForContainerInputJsonSchema,
+    execute: async (input, context) => reportContainerUsecase.execute(context, input as z.infer<typeof ReportForContainerInput>)
+  };
+  register(reportContainerTool);
   const taskTool: RegisteredTool<TaskFuzzySearchOutputType> = {
     name: "clickup_task_fuzzy_search",
     description: "Fuzzy search tasks by text across titles, descriptions, comments and fields",

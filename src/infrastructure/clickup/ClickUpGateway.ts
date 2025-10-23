@@ -289,6 +289,142 @@ export class ClickUpGateway {
     return response.data;
   }
 
+  async start_timer(taskId: string, body: { description?: string }): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/time/start`),
+      headers: this.authHeader(),
+      json: body,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async stop_timer(taskId: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/time/stop`),
+      headers: this.authHeader(),
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async create_time_entry(taskId: string, body: { start: string; end: string; description?: string; billable?: boolean; assignee?: number }): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/time`),
+      headers: this.authHeader(),
+      json: body,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async update_time_entry(entryId: string, body: { start?: string; end?: string; description?: string; billable?: boolean }): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "PUT",
+      url: this.buildUrl(`/api/v2/time/${entryId}`),
+      headers: this.authHeader(),
+      json: body,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async delete_time_entry(entryId: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "DELETE",
+      url: this.buildUrl(`/api/v2/time/${entryId}`),
+      headers: this.authHeader(),
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async list_time_entries(teamId: number, params: Record<string, unknown>): Promise<unknown> {
+    const query: Record<string, unknown> = {};
+    const memberIds = params.memberIds;
+    if (Array.isArray(memberIds) && memberIds.length > 0) {
+      query["assignee[]"] = memberIds;
+    }
+    const taskIds = params.taskIds;
+    if (Array.isArray(taskIds) && taskIds.length > 0) {
+      query["task[]"] = taskIds;
+    }
+    const sinceValue = params.since;
+    let sinceMs: number | null = null;
+    if (typeof sinceValue === "number" && Number.isFinite(sinceValue)) {
+      sinceMs = Math.trunc(sinceValue);
+    } else if (typeof sinceValue === "string") {
+      const parsed = Date.parse(sinceValue);
+      if (!Number.isNaN(parsed)) {
+        sinceMs = Math.trunc(parsed);
+      }
+    }
+    if (sinceMs !== null) {
+      query.start_date = String(sinceMs);
+    }
+    const untilValue = params.until;
+    let untilMs: number | null = null;
+    if (typeof untilValue === "number" && Number.isFinite(untilValue)) {
+      untilMs = Math.trunc(untilValue);
+    } else if (typeof untilValue === "string") {
+      const parsed = Date.parse(untilValue);
+      if (!Number.isNaN(parsed)) {
+        untilMs = Math.trunc(parsed);
+      }
+    }
+    if (untilMs !== null) {
+      query.end_date = String(untilMs);
+    }
+    const pageValue = params.page;
+    if (typeof pageValue === "number" && Number.isFinite(pageValue)) {
+      query.page = Math.max(0, Math.trunc(pageValue));
+    }
+    const limitValue = params.limit;
+    if (typeof limitValue === "number" && Number.isFinite(limitValue)) {
+      const limit = Math.max(1, Math.trunc(limitValue));
+      query.limit = limit;
+    }
+    if (typeof params.includeRunning === "boolean") {
+      query.include_running = params.includeRunning ? "true" : "false";
+    }
+    if (typeof params.includeBillable === "boolean") {
+      query.include_billable = params.includeBillable ? "true" : "false";
+    }
+    const cacheKey = this.cache.makeKey({ s: "time_entries", teamId, h: JSON.stringify(query) });
+    const cached = await this.cache.get<unknown>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/team/${teamId}/time_entries`),
+      headers: this.authHeader(),
+      params: query,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    await this.cache.put(cacheKey, response.data, 30);
+    return response.data;
+  }
+
+  async list_view_tasks(
+    parentType: "team" | "space" | "folder" | "list",
+    parentId: string | number,
+    viewId: string,
+    params?: Record<string, unknown>
+  ): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/${parentType}/${parentId}/view/${viewId}/task`),
+      headers: this.authHeader(),
+      params,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
   async comment_task(taskId: string, markdown: string): Promise<unknown> {
     const response = await this.client.requestChecked({
       method: "POST",
