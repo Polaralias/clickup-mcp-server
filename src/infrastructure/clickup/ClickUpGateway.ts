@@ -139,56 +139,87 @@ export class ClickUpGateway {
     return response.data;
   }
 
-  async update_task(taskId: string, body: Record<string, unknown>): Promise<unknown> {
-    const response = await this.client.requestChecked({
-      method: "PUT",
-      url: this.buildUrl(`/api/v2/task/${taskId}`),
-      headers: this.authHeader(),
-      json: body,
-      timeoutMs: this.cfg.timeoutMs
-    });
-    return response.data;
-  }
-
-  async set_task_custom_field(
-    taskId: string,
-    fieldId: string,
-    value: unknown,
-    value_options?: Record<string, unknown>
-  ): Promise<unknown> {
-    const payload: Record<string, unknown> = { value };
-    if (typeof value_options !== "undefined") {
-      payload.value_options = value_options;
-    }
-    const response = await this.client.requestChecked({
-      method: "POST",
-      url: this.buildUrl(`/api/v2/task/${taskId}/field/${fieldId}`),
-      headers: this.authHeader(),
-      json: payload,
-      timeoutMs: this.cfg.timeoutMs
-    });
-    return response.data;
-  }
-
-  async add_task_comment(taskId: string, markdown: string): Promise<unknown> {
-    const response = await this.client.requestChecked({
-      method: "POST",
-      url: this.buildUrl(`/api/v2/task/${taskId}/comment`),
-      headers: this.authHeader(),
-      json: { comment_text: markdown },
-      timeoutMs: this.cfg.timeoutMs
-    });
-    return response.data;
-  }
-
-  async get_doc_page(workspaceId: number, docId: string, pageId: string, format: string): Promise<unknown> {
+  async list_workspaces(page: number, limit: number): Promise<unknown> {
     const response = await this.client.requestChecked({
       method: "GET",
-      url: this.buildUrl(`/api/v3/workspaces/${workspaceId}/docs/${docId}/pages/${pageId}`),
+      url: this.buildUrl("/api/v2/team"),
       headers: this.authHeader(),
-      params: { content_format: format },
+      params: { page, limit },
       timeoutMs: this.cfg.timeoutMs
     });
+    return response.data;
+  }
+
+  async list_spaces(teamId: number, page: number, limit: number, includeArchived: boolean): Promise<unknown> {
+    const cacheKey = this.cache.makeKey({ s: "spaces", teamId, page, limit, archived: includeArchived ? 1 : 0 });
+    const cached = await this.cache.get<unknown>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/team/${teamId}/space`),
+      headers: this.authHeader(),
+      params: { page, limit, archived: includeArchived ? "true" : "false" },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    await this.cache.put(cacheKey, response.data, 60);
+    return response.data;
+  }
+
+  async list_folders(spaceId: string, page: number, limit: number, includeArchived: boolean): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/space/${spaceId}/folder`),
+      headers: this.authHeader(),
+      params: { page, limit, archived: includeArchived ? "true" : "false" },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async list_lists_under(
+    parentType: "space" | "folder",
+    parentId: string,
+    page: number,
+    limit: number,
+    includeArchived: boolean
+  ): Promise<unknown> {
+    const path = parentType === "space" ? `/api/v2/space/${parentId}/list` : `/api/v2/folder/${parentId}/list`;
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(path),
+      headers: this.authHeader(),
+      params: { page, limit, archived: includeArchived ? "true" : "false" },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async list_tags_for_space(spaceId: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/space/${spaceId}/tag`),
+      headers: this.authHeader(),
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async list_members(teamId: number, page: number, limit: number): Promise<unknown> {
+    const cacheKey = this.cache.makeKey({ s: "members", teamId, page, limit });
+    const cached = await this.cache.get<unknown>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/team/${teamId}/member`),
+      headers: this.authHeader(),
+      params: { page, limit },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    await this.cache.put(cacheKey, response.data, 60);
     return response.data;
   }
 }
