@@ -1,0 +1,12 @@
+<evaluation service="ClickUp-MCP" version="0.1.0">
+  <task>Find ClickUp doc pages about incident response in workspace 123, return the top 3 with titles and links.</task>
+  <task>Search docs for two queries, runbook and oncall, then give me the union of unique pages sorted by relevance.</task>
+  <task>Fuzzy search my tasks for the phrase “login bug” and show the best 5 matches with status and assignees.</task>
+  <task>Fuzzy search multiple phrases “login” and “signup” and present a merged list of unique tasks sorted by relevance.</task>
+  <task>For the doc results about incident response, tell me whether there are more pages available after the first page.</task>
+  <task>Show the service health snapshot including version and configured character limit.</task>
+  <task>List all available tools, including whether each one is read-only and any pagination fields, and include example inputs.</task>
+  <task>Search docs for “runbook” with page set to 2 and limit 5 and tell me how many total results there are.</task>
+  <task>Perform a fuzzy search for tasks mentioning “2FA” and confirm whether closed tasks are included by default.</task>
+  <task>Search docs for an excessively long query and ensure the response respects the character limit, reporting if truncated.</task>
+</evaluation>

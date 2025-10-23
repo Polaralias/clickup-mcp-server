@@ -60,6 +60,8 @@ export type RegisteredTool<TOutput = unknown> = {
 const healthInputSchema = z.object({}).strict();
 const healthInputJsonSchema: JsonSchema = { type: "object", properties: {}, required: [], additionalProperties: false };
 
+const catalogueInputJsonSchema: JsonSchema = { type: "object", properties: {}, required: [], additionalProperties: false };
+
 const docSearchInputJsonSchema: JsonSchema = {
   type: "object",
   properties: {
@@ -380,6 +382,12 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const taskIndex = new TaskSearchIndex(taskLoader, 60);
   const taskSearch = new TaskFuzzySearch(taskIndex, gateway);
   const bulkTaskSearch = new BulkTaskFuzzySearch(taskSearch);
+  const tools: RegisteredTool[] = [];
+  const register = <TOutput>(tool: RegisteredTool<TOutput>): RegisteredTool<TOutput> => {
+    tools.push(tool as RegisteredTool);
+    return tool;
+  };
+  register(healthTool);
   const docTool: RegisteredTool<DocSearchOutputType> = {
     name: "clickup_doc_search",
     description: "Search ClickUp Docs by query with pagination and optional inline page expansion",
@@ -388,6 +396,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: docSearchInputJsonSchema,
     execute: async (input, context) => docSearch.execute(context, input as z.infer<typeof DocSearchInput>)
   };
+  register(docTool);
   const bulkTool: RegisteredTool<BulkDocSearchOutputType> = {
     name: "clickup_bulk_doc_search",
     description: "Run multiple doc searches concurrently and merge unique pages",
@@ -412,6 +421,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: taskFuzzySearchInputJsonSchema,
     execute: async (input, context) => taskSearch.execute(context, input as TaskFuzzySearchInputType)
   };
+  register(taskTool);
   const bulkTaskTool: RegisteredTool<BulkTaskFuzzySearchOutputType> = {
     name: "clickup_bulk_task_fuzzy_search",
     description: "Run multiple fuzzy task searches concurrently and merge unique tasks",
@@ -420,6 +430,29 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: bulkTaskFuzzySearchInputJsonSchema,
     execute: async (input, context) => bulkTaskSearch.execute(context, input as BulkTaskFuzzySearchInputType)
   };
+  register(bulkTaskTool);
+  const catalogueTool: RegisteredTool<CatalogueOutputType> = {
+    name: "tool_catalogue",
+    description: "List all available tools with annotations and examples",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: CatalogueRequest,
+    inputJsonSchema: catalogueInputJsonSchema,
+    execute: async input => {
+      const parsed = CatalogueRequest.safeParse(input ?? {});
+      if (!parsed.success) {
+        return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
+      }
+      const toolDefs: ToolDef[] = tools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        annotations: tool.annotations
+      }));
+      const { payload } = buildCatalogue(PROJECT_NAME, packageMetadata.version, CHARACTER_LIMIT, toolDefs);
+      const output = CatalogueOutput.parse(payload);
+      return ok(output, output.truncated === true, output.guidance);
+    }
+  };
+  register(catalogueTool);
   void runtime;
   return [healthTool, docTool, bulkTool, updateTool, taskTool, bulkTaskTool];
 }
