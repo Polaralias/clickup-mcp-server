@@ -6,7 +6,15 @@ export const DocSearchInput = z
     query: z.string().min(1),
     limit: z.number().int().min(1).max(50).default(20),
     page: z.number().int().min(0).default(0),
-    contentFormat: z.enum(["text/md", "text/html", "application/json"]).optional()
+    contentFormat: z.enum(["text/md", "text/html", "application/json"]).optional(),
+    expandPages: z.boolean().default(false),
+    pageBody: z
+      .object({
+        contentFormat: z.enum(["text/md", "text/html", "application/json"]).optional(),
+        limit: z.number().int().min(1).max(10).optional()
+      })
+      .strict()
+      .optional()
   })
   .strict();
 
