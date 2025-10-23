@@ -17,6 +17,23 @@ import {
   BulkTaskFuzzySearchOutput
 } from "./schemas/taskSearch.js";
 import type { TaskScopeType } from "./schemas/taskSearch.js";
+import {
+  CreateTaskInput,
+  CreateTaskOutput,
+  MoveTaskInput,
+  DuplicateTaskInput,
+  DeleteTaskInput,
+  SearchTasksInput,
+  SearchTasksOutput,
+  CommentTaskInput,
+  CommentTaskOutput,
+  AttachFileToTaskInput,
+  AttachFileToTaskOutput,
+  AddTagsToTaskInput,
+  RemoveTagsFromTaskInput,
+  TagsOutput
+} from "./schemas/taskCrud.js";
+import { CatalogueRequest, CatalogueOutput } from "./schemas/catalogue.js";
 import { UpdateTaskInput, UpdateTaskOutput } from "./schemas/taskUpdate.js";
 import { DocSearch } from "../../application/usecases/DocSearch.js";
 import { BulkDocSearch } from "../../application/usecases/BulkDocSearch.js";
@@ -24,6 +41,14 @@ import { TaskSearchIndex, type TaskIndexRecord } from "../../application/service
 import { TaskFuzzySearch } from "../../application/usecases/TaskFuzzySearch.js";
 import { BulkTaskFuzzySearch } from "../../application/usecases/BulkTaskFuzzySearch.js";
 import { UpdateTask } from "../../application/usecases/UpdateTask.js";
+import { CreateTask } from "../../application/usecases/tasks/CreateTask.js";
+import { MoveTask } from "../../application/usecases/tasks/MoveTask.js";
+import { DuplicateTask } from "../../application/usecases/tasks/DuplicateTask.js";
+import { DeleteTask } from "../../application/usecases/tasks/DeleteTask.js";
+import { SearchTasks } from "../../application/usecases/tasks/SearchTasks.js";
+import { CommentTask } from "../../application/usecases/tasks/CommentTask.js";
+import { AttachFileToTask } from "../../application/usecases/tasks/AttachFileToTask.js";
+import { AddTagsToTask, RemoveTagsFromTask } from "../../application/usecases/tasks/Tags.js";
 import { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../../shared/KV.js";
 import { HttpClient } from "../../infrastructure/http/HttpClient.js";
@@ -49,6 +74,7 @@ import { Members } from "../../application/usecases/members/Members.js";
 import { ResolveMembers } from "../../application/usecases/members/ResolveMembers.js";
 import { ResolvePath } from "../../application/usecases/resolve/ResolvePath.js";
 import { WorkspaceOverview } from "../../application/usecases/hierarchy/WorkspaceOverview.js";
+import { buildCatalogue, type ToolDef } from "./catalogue.js";
 
 type PackageMetadata = { version: string };
 
@@ -69,6 +95,12 @@ type TaskFuzzySearchOutputType = z.infer<typeof TaskFuzzySearchOutput>;
 type BulkTaskFuzzySearchInputType = z.infer<typeof BulkTaskFuzzySearchInput>;
 type BulkTaskFuzzySearchOutputType = z.infer<typeof BulkTaskFuzzySearchOutput>;
 type UpdateTaskOutputType = z.infer<typeof UpdateTaskOutput>;
+type CreateTaskOutputType = z.infer<typeof CreateTaskOutput>;
+type SearchTasksOutputType = z.infer<typeof SearchTasksOutput>;
+type CommentTaskOutputType = z.infer<typeof CommentTaskOutput>;
+type AttachFileToTaskOutputType = z.infer<typeof AttachFileToTaskOutput>;
+type TagsOutputType = z.infer<typeof TagsOutput>;
+type CatalogueOutputType = z.infer<typeof CatalogueOutput>;
 
 const require = createRequire(import.meta.url);
 const packageMetadata = require("../../../package.json") as PackageMetadata;
@@ -139,6 +171,125 @@ const updateTaskInputJsonSchema: JsonSchema = {
     addCommentMarkdown: { type: "string", minLength: 1 }
   },
   required: ["taskId"],
+  additionalProperties: false
+};
+
+const createTaskInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    listId: { type: "string", minLength: 1 },
+    name: { type: "string", minLength: 1 },
+    description: { type: "string" },
+    assigneeIds: { type: "array", items: { type: "integer" }, maxItems: 20 },
+    status: { type: "string" },
+    priority: { anyOf: [{ type: "string" }, { type: "number" }] },
+    dueDateMs: { type: "integer", minimum: 0 },
+    timeEstimateMs: { type: "integer", minimum: 0 },
+    tags: { type: "array", items: { type: "string" }, maxItems: 50 }
+  },
+  required: ["listId", "name"],
+  additionalProperties: false
+};
+
+const moveTaskInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    targetListId: { type: "string", minLength: 1 }
+  },
+  required: ["taskId", "targetListId"],
+  additionalProperties: false
+};
+
+const duplicateTaskInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    include: {
+      type: "object",
+      properties: {
+        assignees: { type: "boolean", default: true },
+        attachments: { type: "boolean", default: false },
+        comments: { type: "boolean", default: false },
+        customFields: { type: "boolean", default: true },
+        tags: { type: "boolean", default: true },
+        checklists: { type: "boolean", default: true },
+        subtasks: { type: "boolean", default: true }
+      },
+      required: [],
+      additionalProperties: false,
+      default: {}
+    }
+  },
+  required: ["taskId"],
+  additionalProperties: false
+};
+
+const deleteTaskInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    confirm: { type: "string", enum: ["yes"], default: "yes" }
+  },
+  required: ["taskId"],
+  additionalProperties: false
+};
+
+const searchTasksInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    listIds: { type: "array", items: { type: "string" }, maxItems: 50 },
+    spaceIds: { type: "array", items: { type: "string" }, maxItems: 50 },
+    assigneeIds: { type: "array", items: { type: "integer" }, maxItems: 50 },
+    statuses: { type: "array", items: { type: "string" }, maxItems: 50 },
+    includeClosed: { type: "boolean", default: false },
+    query: { type: "string", minLength: 0, maxLength: 200, default: "" },
+    page: { type: "integer", minimum: 0, default: 0 },
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 50 }
+  },
+  required: [],
+  additionalProperties: false
+};
+
+const commentTaskInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    commentMarkdown: { type: "string", minLength: 1 }
+  },
+  required: ["taskId", "commentMarkdown"],
+  additionalProperties: false
+};
+
+const attachFileToTaskInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    dataUri: { type: "string", minLength: 1 },
+    name: { type: "string", minLength: 1 }
+  },
+  required: ["taskId", "dataUri", "name"],
+  additionalProperties: false
+};
+
+const addTagsToTaskInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    tags: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, maxItems: 50 }
+  },
+  required: ["taskId", "tags"],
+  additionalProperties: false
+};
+
+const removeTagsFromTaskInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    tags: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, maxItems: 50 }
+  },
+  required: ["taskId", "tags"],
   additionalProperties: false
 };
 
@@ -487,6 +638,15 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const docSearch = new DocSearch(gateway, cache);
   const bulkDocSearch = new BulkDocSearch(gateway, cache);
   const updateTaskUsecase = new UpdateTask(gateway);
+  const createTaskUsecase = new CreateTask(gateway);
+  const moveTaskUsecase = new MoveTask(gateway);
+  const duplicateTaskUsecase = new DuplicateTask(gateway);
+  const deleteTaskUsecase = new DeleteTask(gateway);
+  const searchTasksUsecase = new SearchTasks(gateway);
+  const commentTaskUsecase = new CommentTask(gateway);
+  const attachFileUsecase = new AttachFileToTask(gateway);
+  const addTagsUsecase = new AddTagsToTask(gateway);
+  const removeTagsUsecase = new RemoveTagsFromTask(gateway);
   const taskLoader = async (scope?: unknown): Promise<TaskIndexRecord[]> => {
     const typedScope = scope as TaskScopeType | undefined;
     const rows = await gateway.fetch_tasks_for_index(typedScope);
@@ -519,6 +679,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: bulkDocSearchInputJsonSchema,
     execute: async (input, context) => bulkDocSearch.execute(context, input as z.infer<typeof BulkDocSearchInput>)
   };
+  register(bulkTool);
   const updateTool: RegisteredTool<UpdateTaskOutputType> = {
     name: "clickup_update_task",
     description: "Update a task and optionally set custom fields, append to description, and add a comment",
@@ -527,6 +688,88 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputJsonSchema: updateTaskInputJsonSchema,
     execute: async (input, context) => updateTaskUsecase.execute(context, input as z.infer<typeof UpdateTaskInput>)
   };
+  register(updateTool);
+  const createTaskTool: RegisteredTool<CreateTaskOutputType> = {
+    name: "clickup_create_task",
+    description: "Create a task in a list with optional assignees, dates, and tags",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: CreateTaskInput,
+    inputJsonSchema: createTaskInputJsonSchema,
+    execute: async (input, context) => createTaskUsecase.execute(context, input as z.infer<typeof CreateTaskInput>)
+  };
+  register(createTaskTool);
+  const moveTaskTool: RegisteredTool<CreateTaskOutputType> = {
+    name: "clickup_move_task",
+    description: "Move a task to another list",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: MoveTaskInput,
+    inputJsonSchema: moveTaskInputJsonSchema,
+    execute: async (input, context) => moveTaskUsecase.execute(context, input as z.infer<typeof MoveTaskInput>)
+  };
+  register(moveTaskTool);
+  const duplicateTaskTool: RegisteredTool<CreateTaskOutputType> = {
+    name: "clickup_duplicate_task",
+    description: "Duplicate a task with control over included elements",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: DuplicateTaskInput,
+    inputJsonSchema: duplicateTaskInputJsonSchema,
+    execute: async (input, context) => duplicateTaskUsecase.execute(context, input as z.infer<typeof DuplicateTaskInput>)
+  };
+  register(duplicateTaskTool);
+  const deleteTaskTool: RegisteredTool<CreateTaskOutputType> = {
+    name: "clickup_delete_task",
+    description: "Delete a task permanently",
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
+    inputSchema: DeleteTaskInput,
+    inputJsonSchema: deleteTaskInputJsonSchema,
+    execute: async (input, context) => deleteTaskUsecase.execute(context, input as z.infer<typeof DeleteTaskInput>)
+  };
+  register(deleteTaskTool);
+  const searchTasksTool: RegisteredTool<SearchTasksOutputType> = {
+    name: "clickup_search_tasks",
+    description: "Search tasks using ClickUp filters and paging",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: SearchTasksInput,
+    inputJsonSchema: searchTasksInputJsonSchema,
+    execute: async (input, context) => searchTasksUsecase.execute(context, input as z.infer<typeof SearchTasksInput>)
+  };
+  register(searchTasksTool);
+  const commentTaskTool: RegisteredTool<CommentTaskOutputType> = {
+    name: "clickup_comment_task",
+    description: "Add a markdown comment to a task",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: CommentTaskInput,
+    inputJsonSchema: commentTaskInputJsonSchema,
+    execute: async (input, context) => commentTaskUsecase.execute(context, input as z.infer<typeof CommentTaskInput>)
+  };
+  register(commentTaskTool);
+  const attachFileTool: RegisteredTool<AttachFileToTaskOutputType> = {
+    name: "clickup_attach_file_to_task",
+    description: "Attach a small file to a task via data URI",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: AttachFileToTaskInput,
+    inputJsonSchema: attachFileToTaskInputJsonSchema,
+    execute: async (input, context) => attachFileUsecase.execute(context, input as z.infer<typeof AttachFileToTaskInput>)
+  };
+  register(attachFileTool);
+  const addTagsTool: RegisteredTool<TagsOutputType> = {
+    name: "clickup_add_tags_to_task",
+    description: "Add one or more tags without replacing others",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: AddTagsToTaskInput,
+    inputJsonSchema: addTagsToTaskInputJsonSchema,
+    execute: async (input, context) => addTagsUsecase.execute(context, input as z.infer<typeof AddTagsToTaskInput>)
+  };
+  register(addTagsTool);
+  const removeTagsTool: RegisteredTool<TagsOutputType> = {
+    name: "clickup_remove_tags_from_task",
+    description: "Remove one or more tags from a task",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: RemoveTagsFromTaskInput,
+    inputJsonSchema: removeTagsFromTaskInputJsonSchema,
+    execute: async (input, context) => removeTagsUsecase.execute(context, input as z.infer<typeof RemoveTagsFromTaskInput>)
+  };
+  register(removeTagsTool);
   const taskTool: RegisteredTool<TaskFuzzySearchOutputType> = {
     name: "clickup_task_fuzzy_search",
     description: "Fuzzy search tasks by text across titles, descriptions, comments and fields",
@@ -542,7 +785,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
     inputSchema: BulkTaskFuzzySearchInput,
     inputJsonSchema: bulkTaskFuzzySearchInputJsonSchema,
-    execute: async (input, context) => bulkTaskSearch.execute(context, input as BulkTaskFuzzySearchInputType)
+    execute: async (input, context) => bulkTaskSearch.execute(context, input as z.infer<typeof BulkTaskFuzzySearchInput>)
   };
   register(bulkTaskTool);
   const workspaces = new Workspaces(gateway);
@@ -649,5 +892,5 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   };
   register(catalogueTool);
   void runtime;
-  return [healthTool, docTool, bulkTool, updateTool, taskTool, bulkTaskTool];
+  return tools;
 }
