@@ -12,11 +12,13 @@ import {
   BulkTaskFuzzySearchOutput
 } from "./schemas/taskSearch.js";
 import type { TaskScopeType } from "./schemas/taskSearch.js";
+import { UpdateTaskInput, UpdateTaskOutput } from "./schemas/taskUpdate.js";
 import { DocSearch } from "../../application/usecases/DocSearch.js";
 import { BulkDocSearch } from "../../application/usecases/BulkDocSearch.js";
 import { TaskSearchIndex, type TaskIndexRecord } from "../../application/services/TaskSearchIndex.js";
 import { TaskFuzzySearch } from "../../application/usecases/TaskFuzzySearch.js";
 import { BulkTaskFuzzySearch } from "../../application/usecases/BulkTaskFuzzySearch.js";
+import { UpdateTask } from "../../application/usecases/UpdateTask.js";
 import { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../../shared/KV.js";
 import { HttpClient } from "../../infrastructure/http/HttpClient.js";
@@ -41,6 +43,7 @@ type TaskFuzzySearchInputType = z.infer<typeof TaskFuzzySearchInput>;
 type TaskFuzzySearchOutputType = z.infer<typeof TaskFuzzySearchOutput>;
 type BulkTaskFuzzySearchInputType = z.infer<typeof BulkTaskFuzzySearchInput>;
 type BulkTaskFuzzySearchOutputType = z.infer<typeof BulkTaskFuzzySearchOutput>;
+type UpdateTaskOutputType = z.infer<typeof UpdateTaskOutput>;
 
 const require = createRequire(import.meta.url);
 const packageMetadata = require("../../../package.json") as PackageMetadata;
@@ -64,9 +67,51 @@ const docSearchInputJsonSchema: JsonSchema = {
     query: { type: "string", minLength: 1 },
     limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
     page: { type: "integer", minimum: 0, default: 0 },
-    contentFormat: { type: "string", enum: ["text/md", "text/html", "application/json"] }
+    contentFormat: { type: "string", enum: ["text/md", "text/html", "application/json"] },
+    expandPages: { type: "boolean", default: false },
+    pageBody: {
+      type: "object",
+      properties: {
+        contentFormat: { type: "string", enum: ["text/md", "text/html", "application/json"] },
+        limit: { type: "integer", minimum: 1, maximum: 10 }
+      },
+      required: [],
+      additionalProperties: false
+    }
   },
   required: ["workspaceId", "query"],
+  additionalProperties: false
+};
+
+const updateTaskInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    taskId: { type: "string", minLength: 1 },
+    name: { type: "string", minLength: 1 },
+    status: { type: "string", minLength: 1 },
+    assigneeIds: { type: "array", items: { type: "integer" }, maxItems: 20 },
+    priority: { anyOf: [{ type: "string" }, { type: "number" }] },
+    dueDateMs: { type: "integer", minimum: 0 },
+    timeEstimateMs: { type: "integer", minimum: 0 },
+    tags: { type: "array", items: { type: "string" }, maxItems: 50 },
+    customFields: {
+      type: "array",
+      maxItems: 25,
+      items: {
+        type: "object",
+        properties: {
+          fieldId: { type: "string", minLength: 1 },
+          value: {},
+          value_options: { type: "object" }
+        },
+        required: ["fieldId", "value"],
+        additionalProperties: false
+      }
+    },
+    appendMarkdownDescription: { type: "string", minLength: 1 },
+    addCommentMarkdown: { type: "string", minLength: 1 }
+  },
+  required: ["taskId"],
   additionalProperties: false
 };
 
@@ -325,6 +370,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const { gateway, cache } = resolveDependencies(deps);
   const docSearch = new DocSearch(gateway, cache);
   const bulkDocSearch = new BulkDocSearch(gateway, cache);
+  const updateTaskUsecase = new UpdateTask(gateway);
   const taskLoader = async (scope?: unknown): Promise<TaskIndexRecord[]> => {
     const typedScope = scope as TaskScopeType | undefined;
     const rows = await gateway.fetch_tasks_for_index(typedScope);
@@ -336,7 +382,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const bulkTaskSearch = new BulkTaskFuzzySearch(taskSearch);
   const docTool: RegisteredTool<DocSearchOutputType> = {
     name: "clickup_doc_search",
-    description: "Search ClickUp Docs by query with pagination",
+    description: "Search ClickUp Docs by query with pagination and optional inline page expansion",
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
     inputSchema: DocSearchInput,
     inputJsonSchema: docSearchInputJsonSchema,
@@ -349,6 +395,14 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     inputSchema: BulkDocSearchInput,
     inputJsonSchema: bulkDocSearchInputJsonSchema,
     execute: async (input, context) => bulkDocSearch.execute(context, input as z.infer<typeof BulkDocSearchInput>)
+  };
+  const updateTool: RegisteredTool<UpdateTaskOutputType> = {
+    name: "clickup_update_task",
+    description: "Update a task and optionally set custom fields, append to description, and add a comment",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: UpdateTaskInput,
+    inputJsonSchema: updateTaskInputJsonSchema,
+    execute: async (input, context) => updateTaskUsecase.execute(context, input as z.infer<typeof UpdateTaskInput>)
   };
   const taskTool: RegisteredTool<TaskFuzzySearchOutputType> = {
     name: "clickup_task_fuzzy_search",
@@ -367,5 +421,5 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     execute: async (input, context) => bulkTaskSearch.execute(context, input as BulkTaskFuzzySearchInputType)
   };
   void runtime;
-  return [healthTool, docTool, bulkTool, taskTool, bulkTaskTool];
+  return [healthTool, docTool, bulkTool, updateTool, taskTool, bulkTaskTool];
 }
