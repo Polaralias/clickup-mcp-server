@@ -129,6 +129,18 @@ export const ReportForContainerInput = ReportCommonFilters.extend({
   ref: ContainerRef
 }).strict();
 
+export const ReportForSpaceTagInput = z
+  .object({
+    teamId: z.number().int().positive(),
+    spaceId: z.string().min(1),
+    tag: z.string().min(1),
+    since: z.string().datetime().optional(),
+    until: z.string().datetime().optional(),
+    includeBillable: z.boolean().default(true),
+    memberIds: z.array(z.number().int().positive()).max(50).optional()
+  })
+  .strict();
+
 export const ReportTaskItem = z
   .object({
     taskId: z.string(),
