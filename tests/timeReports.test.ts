@@ -3,9 +3,11 @@ import "./setup.js";
 import type { ClickUpGateway } from "../src/infrastructure/clickup/ClickUpGateway.js";
 import { ReportTimeForTag } from "../src/application/usecases/time/ReportTimeForTag.js";
 import { ReportTimeForContainer } from "../src/application/usecases/time/ReportTimeForContainer.js";
+import { ReportTimeForSpaceTag } from "../src/application/usecases/time/ReportTimeForSpaceTag.js";
 
 type TagGatewayStub = Pick<ClickUpGateway, "search_tasks" | "list_time_entries">;
 type ContainerGatewayStub = Pick<ClickUpGateway, "search_tasks" | "list_time_entries" | "list_view_tasks">;
+type SpaceTagGatewayStub = Pick<ClickUpGateway, "search_tasks_by_space_and_tag" | "list_time_entries">;
 
 describe("Time reports", () => {
   it("Report by tag aggregates correctly", async () => {
@@ -240,5 +242,90 @@ describe("Time reports", () => {
     expect(result.data.totals.totalMs).toBe(9000000);
     expect(result.data.totals.billableMs).toBe(3600000);
     expect(result.data.byTask[0].totalMs).toBe(9000000);
+  });
+
+  it("Report by space+tag aggregates and sorts", async () => {
+    const search_tasks_by_space_and_tag = vi.fn().mockResolvedValue({
+      tasks: [
+        { id: "T1", name: "One", url: "https://app/tasks/T1", tags: [{ name: "alpha" }] },
+        { id: "T2", name: "Two", url: "https://app/tasks/T2", tags: [{ name: "alpha" }] }
+      ],
+      total_tasks: 2,
+      page: 0,
+      limit: 100
+    });
+    const list_time_entries = vi.fn().mockResolvedValue({
+      time_entries: [
+        {
+          id: "E1",
+          task_id: "T1",
+          user: { id: 11 },
+          start: Date.parse("2025-01-06T09:00:00.000Z"),
+          end: Date.parse("2025-01-06T10:00:00.000Z"),
+          billable: true
+        },
+        {
+          id: "E2",
+          task_id: "T2",
+          user: { id: 12 },
+          start: Date.parse("2025-01-06T11:00:00.000Z"),
+          end: Date.parse("2025-01-06T11:30:00.000Z"),
+          billable: false
+        },
+        {
+          id: "E3",
+          task_id: "T1",
+          user: { id: 12 },
+          start: Date.parse("2025-01-06T12:00:00.000Z"),
+          end: Date.parse("2025-01-06T14:00:00.000Z"),
+          billable: false
+        }
+      ],
+      total: 3,
+      page: 0,
+      limit: 100
+    });
+    const gateway: SpaceTagGatewayStub = { search_tasks_by_space_and_tag, list_time_entries };
+    const usecase = new ReportTimeForSpaceTag(gateway as unknown as ClickUpGateway);
+    const result = await usecase.execute({}, { teamId: 7, spaceId: "S1", tag: "alpha" });
+    expect(search_tasks_by_space_and_tag).toHaveBeenCalledWith(7, "S1", "alpha", 0, 100);
+    expect(list_time_entries).toHaveBeenCalledTimes(1);
+    expect(result.isError).toBe(false);
+    if (result.isError) {
+      throw new Error("Expected success result");
+    }
+    expect(result.data.totals.totalMs).toBe(12600000);
+    expect(result.data.byMember).toEqual([
+      { memberId: 11, totalMs: 3600000, billableMs: 3600000 },
+      { memberId: 12, totalMs: 9000000, billableMs: 0 }
+    ]);
+    expect(result.data.byTask.map(item => ({ taskId: item.taskId, totalMs: item.totalMs }))).toEqual([
+      { taskId: "T1", totalMs: 10800000 },
+      { taskId: "T2", totalMs: 1800000 }
+    ]);
+    expect(result.data.scope).toEqual({ type: "space_tag", value: "S1:alpha" });
+  });
+
+  it("Space+tag respects cap", async () => {
+    const tasks = Array.from({ length: 600 }, (_, index) => ({
+      id: `T${index}`,
+      name: `Task ${index}`,
+      url: `https://app/tasks/T${index}`,
+      tags: [{ name: "alpha" }]
+    }));
+    const search_tasks_by_space_and_tag = vi.fn().mockResolvedValue({ tasks, total_tasks: 600, page: 0, limit: 100 });
+    const list_time_entries = vi.fn().mockResolvedValue({ time_entries: [], total: 0, page: 0, limit: 100 });
+    const gateway: SpaceTagGatewayStub = { search_tasks_by_space_and_tag, list_time_entries };
+    const usecase = new ReportTimeForSpaceTag(gateway as unknown as ClickUpGateway);
+    const result = await usecase.execute({}, { teamId: 8, spaceId: "S2", tag: "alpha" });
+    expect(result.isError).toBe(false);
+    if (result.isError) {
+      throw new Error("Expected success result");
+    }
+    const params = list_time_entries.mock.calls[0][1] as Record<string, unknown>;
+    const taskIds = params.taskIds as string[];
+    expect(taskIds.length).toBe(500);
+    expect(result.data.truncated).toBe(true);
+    expect(result.data.guidance).toBe("Task set capped at 500 tasks for reporting");
   });
 });

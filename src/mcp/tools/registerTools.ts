@@ -11,6 +11,16 @@ import {
   BulkDocSearchOutput
 } from "./schemas/doc.js";
 import {
+  CreateDocInput,
+  CreateDocOutput,
+  ListDocPagesInput,
+  ListDocPagesOutput,
+  GetDocPageInput,
+  GetDocPageOutput,
+  UpdateDocPageInput,
+  UpdateDocPageOutput
+} from "./schemas/docCrud.js";
+import {
   TaskFuzzySearchInput,
   TaskFuzzySearchOutput,
   BulkTaskFuzzySearchInput,
@@ -46,10 +56,15 @@ import {
   ListEntriesOutput,
   ReportForTagInput,
   ReportOutput,
-  ReportForContainerInput
+  ReportForContainerInput,
+  ReportForSpaceTagInput
 } from "./schemas/time.js";
 import { DocSearch } from "../../application/usecases/DocSearch.js";
 import { BulkDocSearch } from "../../application/usecases/BulkDocSearch.js";
+import { CreateDoc } from "../../application/usecases/docs/CreateDoc.js";
+import { ListDocPages } from "../../application/usecases/docs/ListDocPages.js";
+import { GetDocPage } from "../../application/usecases/docs/GetDocPage.js";
+import { UpdateDocPage } from "../../application/usecases/docs/UpdateDocPage.js";
 import { TaskSearchIndex, type TaskIndexRecord } from "../../application/services/TaskSearchIndex.js";
 import { TaskFuzzySearch } from "../../application/usecases/TaskFuzzySearch.js";
 import { BulkTaskFuzzySearch } from "../../application/usecases/BulkTaskFuzzySearch.js";
@@ -70,6 +85,7 @@ import { DeleteEntry } from "../../application/usecases/time/DeleteEntry.js";
 import { ListEntries } from "../../application/usecases/time/ListEntries.js";
 import { ReportTimeForTag } from "../../application/usecases/time/ReportTimeForTag.js";
 import { ReportTimeForContainer } from "../../application/usecases/time/ReportTimeForContainer.js";
+import { ReportTimeForSpaceTag } from "../../application/usecases/time/ReportTimeForSpaceTag.js";
 import { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../../shared/KV.js";
 import { HttpClient } from "../../infrastructure/http/HttpClient.js";
@@ -125,6 +141,10 @@ type CatalogueOutputType = z.infer<typeof CatalogueOutput>;
 type TimerOutputType = z.infer<typeof TimerOutput>;
 type ListEntriesOutputType = z.infer<typeof ListEntriesOutput>;
 type ReportOutputType = z.infer<typeof ReportOutput>;
+type CreateDocOutputType = z.infer<typeof CreateDocOutput>;
+type ListDocPagesOutputType = z.infer<typeof ListDocPagesOutput>;
+type GetDocPageOutputType = z.infer<typeof GetDocPageOutput>;
+type UpdateDocPageOutputType = z.infer<typeof UpdateDocPageOutput>;
 
 const require = createRequire(import.meta.url);
 const packageMetadata = require("../../../package.json") as PackageMetadata;
@@ -163,6 +183,55 @@ const docSearchInputJsonSchema: JsonSchema = {
     }
   },
   required: ["workspaceId", "query"],
+  additionalProperties: false
+};
+
+const createDocInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    workspaceId: { type: "integer", minimum: 1 },
+    title: { type: "string", minLength: 1 },
+    visibility: { type: "string", enum: ["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"], default: "PRIVATE" }
+  },
+  required: ["workspaceId", "title"],
+  additionalProperties: false
+};
+
+const listDocPagesInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    workspaceId: { type: "integer", minimum: 1 },
+    docId: { type: "string", minLength: 1 },
+    limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+    page: { type: "integer", minimum: 0, default: 0 }
+  },
+  required: ["workspaceId", "docId"],
+  additionalProperties: false
+};
+
+const getDocPageInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    workspaceId: { type: "integer", minimum: 1 },
+    docId: { type: "string", minLength: 1 },
+    pageId: { type: "string", minLength: 1 },
+    contentFormat: { type: "string", enum: ["text/md", "text/html", "application/json"], default: "text/md" }
+  },
+  required: ["workspaceId", "docId", "pageId"],
+  additionalProperties: false
+};
+
+const updateDocPageInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    workspaceId: { type: "integer", minimum: 1 },
+    docId: { type: "string", minLength: 1 },
+    pageId: { type: "string", minLength: 1 },
+    contentFormat: { type: "string", enum: ["text/md", "text/html", "application/json"], default: "text/md" },
+    content: { type: "string", minLength: 1 },
+    title: { type: "string" }
+  },
+  required: ["workspaceId", "docId", "pageId", "content"],
   additionalProperties: false
 };
 
@@ -343,6 +412,21 @@ const reportForTagInputJsonSchema: JsonSchema = {
     tag: { type: "string", minLength: 1 }
   },
   required: ["teamId", "tag"],
+  additionalProperties: false
+};
+
+const reportForSpaceTagInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    spaceId: { type: "string", minLength: 1 },
+    tag: { type: "string", minLength: 1 },
+    since: { type: "string", format: "date-time" },
+    until: { type: "string", format: "date-time" },
+    includeBillable: { type: "boolean", default: true },
+    memberIds: { type: "array", items: { type: "integer", minimum: 1 }, maxItems: 50 }
+  },
+  required: ["teamId", "spaceId", "tag"],
   additionalProperties: false
 };
 
@@ -772,6 +856,10 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const { gateway, cache } = resolveDependencies(deps);
   const docSearch = new DocSearch(gateway, cache);
   const bulkDocSearch = new BulkDocSearch(gateway, cache);
+  const createDocUsecase = new CreateDoc(gateway);
+  const listDocPagesUsecase = new ListDocPages(gateway);
+  const getDocPageUsecase = new GetDocPage(gateway);
+  const updateDocPageUsecase = new UpdateDocPage(gateway);
   const updateTaskUsecase = new UpdateTask(gateway);
   const createTaskUsecase = new CreateTask(gateway);
   const moveTaskUsecase = new MoveTask(gateway);
@@ -790,6 +878,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const listEntriesUsecase = new ListEntries(gateway);
   const reportTagUsecase = new ReportTimeForTag(gateway);
   const reportContainerUsecase = new ReportTimeForContainer(gateway);
+  const reportSpaceTagUsecase = new ReportTimeForSpaceTag(gateway);
   const taskLoader = async (scope?: unknown): Promise<TaskIndexRecord[]> => {
     const typedScope = scope as TaskScopeType | undefined;
     const rows = await gateway.fetch_tasks_for_index(typedScope);
@@ -823,6 +912,42 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     execute: async (input, context) => bulkDocSearch.execute(context, input as z.infer<typeof BulkDocSearchInput>)
   };
   register(bulkTool);
+  const createDocTool: RegisteredTool<CreateDocOutputType> = {
+    name: "clickup_create_doc",
+    description: "Create a doc in a workspace",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: CreateDocInput,
+    inputJsonSchema: createDocInputJsonSchema,
+    execute: async (input, context) => createDocUsecase.execute(context, input as z.infer<typeof CreateDocInput>)
+  };
+  register(createDocTool);
+  const listDocPagesTool: RegisteredTool<ListDocPagesOutputType> = {
+    name: "clickup_list_doc_pages",
+    description: "List pages within a doc with paging",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ListDocPagesInput,
+    inputJsonSchema: listDocPagesInputJsonSchema,
+    execute: async (input, context) => listDocPagesUsecase.execute(context, input as z.infer<typeof ListDocPagesInput>)
+  };
+  register(listDocPagesTool);
+  const getDocPageTool: RegisteredTool<GetDocPageOutputType> = {
+    name: "clickup_get_doc_page",
+    description: "Get a page’s content in a specific format",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: GetDocPageInput,
+    inputJsonSchema: getDocPageInputJsonSchema,
+    execute: async (input, context) => getDocPageUsecase.execute(context, input as z.infer<typeof GetDocPageInput>)
+  };
+  register(getDocPageTool);
+  const updateDocPageTool: RegisteredTool<UpdateDocPageOutputType> = {
+    name: "clickup_update_doc_page",
+    description: "Update a page’s content and optionally title",
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    inputSchema: UpdateDocPageInput,
+    inputJsonSchema: updateDocPageInputJsonSchema,
+    execute: async (input, context) => updateDocPageUsecase.execute(context, input as z.infer<typeof UpdateDocPageInput>)
+  };
+  register(updateDocPageTool);
   const updateTool: RegisteredTool<UpdateTaskOutputType> = {
     name: "clickup_update_task",
     description: "Update a task and optionally set custom fields, append to description, and add a comment",
@@ -985,6 +1110,16 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     execute: async (input, context) => reportContainerUsecase.execute(context, input as z.infer<typeof ReportForContainerInput>)
   };
   register(reportContainerTool);
+  const reportSpaceTagTool: RegisteredTool<ReportOutputType> = {
+    name: "clickup_report_time_for_space_tag",
+    description: "Sum time tracked on tasks in a space with a specific tag",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ReportForSpaceTagInput,
+    inputJsonSchema: reportForSpaceTagInputJsonSchema,
+    execute: async (input, context) =>
+      reportSpaceTagUsecase.execute(context, input as z.infer<typeof ReportForSpaceTagInput>)
+  };
+  register(reportSpaceTagTool);
   const taskTool: RegisteredTool<TaskFuzzySearchOutputType> = {
     name: "clickup_task_fuzzy_search",
     description: "Fuzzy search tasks by text across titles, descriptions, comments and fields",

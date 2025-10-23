@@ -68,6 +68,82 @@ export class ClickUpGateway {
     return response.data;
   }
 
+  async create_doc(workspaceId: number, body: { title: string; visibility: string }): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v3/workspaces/${workspaceId}/docs`),
+      headers: this.authHeader(),
+      json: body,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async list_doc_pages(
+    workspaceId: number,
+    docId: string,
+    params: { limit: number; page: number }
+  ): Promise<unknown> {
+    const query = { limit: params.limit, page: params.page };
+    let cacheKey: string | null = null;
+    if (params.page === 0) {
+      cacheKey = this.cache.makeKey({ s: "doc_pages", ws: workspaceId, docId, limit: params.limit, page: params.page });
+      const cached = await this.cache.get<unknown>(cacheKey);
+      if (cached !== null) {
+        return cached;
+      }
+    }
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v3/workspaces/${workspaceId}/docs/${docId}/pages`),
+      headers: this.authHeader(),
+      params: query,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    if (cacheKey) {
+      await this.cache.put(cacheKey, response.data, 30);
+    }
+    return response.data;
+  }
+
+  async get_doc_page(
+    workspaceId: number,
+    docId: string,
+    pageId: string,
+    contentFormat: string
+  ): Promise<unknown> {
+    const cacheKey = this.cache.makeKey({ s: "doc_page", ws: workspaceId, docId, pageId, format: contentFormat });
+    const cached = await this.cache.get<unknown>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v3/workspaces/${workspaceId}/docs/${docId}/pages/${pageId}`),
+      headers: this.authHeader(),
+      params: { content_format: contentFormat },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    await this.cache.put(cacheKey, response.data, 30);
+    return response.data;
+  }
+
+  async update_doc_page(
+    workspaceId: number,
+    docId: string,
+    pageId: string,
+    body: { content_format: string; content: string; title?: string }
+  ): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "PUT",
+      url: this.buildUrl(`/api/v3/workspaces/${workspaceId}/docs/${docId}/pages/${pageId}`),
+      headers: this.authHeader(),
+      json: body,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
   async fetch_tasks_for_index(scope?: {
     teamId?: number;
     listIds?: string[];
@@ -286,6 +362,41 @@ export class ClickUpGateway {
       params: query,
       timeoutMs: this.cfg.timeoutMs
     });
+    return response.data;
+  }
+
+  async search_tasks_by_space_and_tag(
+    teamId: number,
+    spaceId: string,
+    tag: string,
+    page: number,
+    limit: number
+  ): Promise<unknown> {
+    const query = {
+      page: Math.max(0, Math.trunc(page)),
+      limit: Math.max(1, Math.trunc(limit)),
+      include_closed: "true",
+      "space_ids[]": [spaceId],
+      "tags[]": [tag]
+    };
+    let cacheKey: string | null = null;
+    if (query.page === 0) {
+      cacheKey = this.cache.makeKey({ s: "space_tag", teamId, spaceId, tag, limit: query.limit });
+      const cached = await this.cache.get<unknown>(cacheKey);
+      if (cached !== null) {
+        return cached;
+      }
+    }
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/team/${teamId}/task`),
+      headers: this.authHeader(),
+      params: query,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    if (cacheKey) {
+      await this.cache.put(cacheKey, response.data, 60);
+    }
     return response.data;
   }
 
