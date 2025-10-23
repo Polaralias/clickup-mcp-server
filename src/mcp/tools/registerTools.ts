@@ -399,7 +399,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const updateTool: RegisteredTool<UpdateTaskOutputType> = {
     name: "clickup_update_task",
     description: "Update a task and optionally set custom fields, append to description, and add a comment",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: UpdateTaskInput,
     inputJsonSchema: updateTaskInputJsonSchema,
     execute: async (input, context) => updateTaskUsecase.execute(context, input as z.infer<typeof UpdateTaskInput>)

@@ -27,7 +27,8 @@ export const DocSearchItem = z
     url: z.string(),
     score: z.number().nullable(),
     updatedAt: z.string().nullable(),
-    visibility: z.enum(["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"]).nullable()
+    visibility: z.enum(["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"]).nullable(),
+    content: z.string().optional()
   })
   .strict();
 
