@@ -138,4 +138,57 @@ export class ClickUpGateway {
     });
     return response.data;
   }
+
+  async update_task(taskId: string, body: Record<string, unknown>): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "PUT",
+      url: this.buildUrl(`/api/v2/task/${taskId}`),
+      headers: this.authHeader(),
+      json: body,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async set_task_custom_field(
+    taskId: string,
+    fieldId: string,
+    value: unknown,
+    value_options?: Record<string, unknown>
+  ): Promise<unknown> {
+    const payload: Record<string, unknown> = { value };
+    if (typeof value_options !== "undefined") {
+      payload.value_options = value_options;
+    }
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/field/${fieldId}`),
+      headers: this.authHeader(),
+      json: payload,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async add_task_comment(taskId: string, markdown: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/comment`),
+      headers: this.authHeader(),
+      json: { comment_text: markdown },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async get_doc_page(workspaceId: number, docId: string, pageId: string, format: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v3/workspaces/${workspaceId}/docs/${docId}/pages/${pageId}`),
+      headers: this.authHeader(),
+      params: { content_format: format },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
 }

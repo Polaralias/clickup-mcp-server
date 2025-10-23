@@ -5,13 +5,18 @@ import { err, ok, Result } from "../../shared/Result.js";
 import { mapHttpError } from "../../shared/Errors.js";
 import type { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import type { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway.js";
+import { BulkProcessor, type WorkItem } from "../services/BulkProcessor.js";
+import { createLogger } from "../../shared/Logger.js";
 
 const visibilityValues = new Set(["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"]);
 
 type DocSearchOutputType = z.infer<typeof DocSearchOutput>;
 type DocSearchItemType = z.infer<typeof DocSearchItem>;
+type ExtendedDocItem = DocSearchItemType & { content?: string };
 
 type HttpErrorLike = { status?: number; data?: unknown };
+
+type PageFetchResult = { index: number; content: string };
 
 function toStringValue(value: unknown, fallback: string): string {
   if (typeof value === "string") {
@@ -71,7 +76,61 @@ function normaliseVisibility(value: unknown): DocSearchItemType["visibility"] {
   return null;
 }
 
-function shortenField(items: DocSearchItemType[], field: "snippet" | "title"): boolean {
+function clamp(value: number, min: number, max: number): number {
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
+
+function extractContent(payload: unknown): string | null {
+  if (typeof payload === "string") {
+    return payload;
+  }
+  if (Array.isArray(payload)) {
+    for (const entry of payload) {
+      const result = extractContent(entry);
+      if (result !== null) {
+        return result;
+      }
+    }
+    return null;
+  }
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    const candidates: unknown[] = [];
+    if ("content" in record) {
+      candidates.push(record.content);
+    }
+    if ("body" in record) {
+      candidates.push(record.body);
+    }
+    if ("text" in record) {
+      candidates.push(record.text);
+    }
+    if ("data" in record) {
+      candidates.push(record.data);
+    }
+    if ("value" in record) {
+      candidates.push(record.value);
+    }
+    for (const candidate of candidates) {
+      const result = extractContent(candidate);
+      if (result !== null) {
+        return result;
+      }
+    }
+  }
+  return null;
+}
+
+function shortenField(
+  items: ExtendedDocItem[],
+  field: keyof Pick<ExtendedDocItem, "content" | "snippet" | "title">
+): boolean {
   let index = -1;
   let maxLength = -1;
   for (let i = 0; i < items.length; i += 1) {
@@ -99,21 +158,21 @@ function enforceLimit(out: DocSearchOutputType): void {
   if (payload.length <= limit) {
     return;
   }
-  const items = out.results;
+  const items = out.results as ExtendedDocItem[];
   let truncated = false;
-  while (payload.length > limit) {
-    if (!shortenField(items, "snippet")) {
-      break;
+  const fields: (keyof Pick<ExtendedDocItem, "content" | "snippet" | "title">)[] = [
+    "content",
+    "snippet",
+    "title"
+  ];
+  for (const field of fields) {
+    while (payload.length > limit) {
+      if (!shortenField(items, field)) {
+        break;
+      }
+      truncated = true;
+      payload = JSON.stringify(out);
     }
-    truncated = true;
-    payload = JSON.stringify(out);
-  }
-  while (payload.length > limit) {
-    if (!shortenField(items, "title")) {
-      break;
-    }
-    truncated = true;
-    payload = JSON.stringify(out);
   }
   if (truncated) {
     out.truncated = true;
@@ -135,7 +194,7 @@ export class DocSearch {
       const response = await this.gateway.search_docs(data.workspaceId, data.query, data.limit, data.page);
       const payload = response as { total?: unknown; items?: unknown } | null | undefined;
       const rawItems: unknown[] = Array.isArray(payload?.items) ? (payload?.items as unknown[]) : [];
-      const results: DocSearchItemType[] = rawItems.map(item => {
+      const results: ExtendedDocItem[] = rawItems.map(item => {
         const record = item as Record<string, unknown> | null | undefined;
         const docValue = record?.doc_id ?? record?.docId ?? (typeof record?.id !== "undefined" ? record?.id : "");
         const pageValue = record?.page_id ?? record?.pageId ?? "";
@@ -143,7 +202,7 @@ export class DocSearch {
         const scoreValue = record?.score;
         const updatedValue = record?.updated_at ?? record?.updatedAt;
         const visibilityValue = record?.visibility;
-        const element: DocSearchItemType = {
+        const element: ExtendedDocItem = {
           docId: toStringValue(docValue, ""),
           pageId: toStringValue(pageValue, ""),
           title: toOptionalString(record?.title ?? null),
@@ -158,6 +217,44 @@ export class DocSearch {
         };
         return element;
       });
+      if (data.expandPages) {
+        const format = data.pageBody?.contentFormat ?? "text/md";
+        const limitCount = clamp(data.pageBody?.limit ?? 3, 1, 10);
+        const slice = results.slice(0, limitCount);
+        const targets = slice.filter(item => item.docId.length > 0 && item.pageId.length > 0);
+        if (targets.length > 0) {
+          const logger = createLogger("info");
+          const processor = new BulkProcessor(logger);
+          const workItems: WorkItem<PageFetchResult>[] = targets.map((item, workIndex) => {
+            return async () => {
+              const response = await this.gateway.get_doc_page(
+                data.workspaceId,
+                item.docId,
+                item.pageId,
+                format
+              );
+              const content = extractContent(response);
+              if (content === null) {
+                throw new Error("Missing content");
+              }
+              return { index: workIndex, content };
+            };
+          });
+          const batch = await processor.run(workItems, {
+            concurrency: 3,
+            retryCount: 1,
+            retryDelayMs: 200,
+            exponentialBackoff: true,
+            continueOnError: true
+          });
+          for (const success of batch.successful) {
+            const target = targets[success.index];
+            if (target) {
+              target.content = success.content;
+            }
+          }
+        }
+      }
       const totalRaw = payload?.total ?? null;
       const totalNumber = toIntValue(totalRaw);
       const total = totalNumber === null ? results.length : totalNumber;

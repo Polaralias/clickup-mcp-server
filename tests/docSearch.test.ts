@@ -7,7 +7,7 @@ import { makeMemoryKV } from "../src/shared/KV.js";
 import type { ClickUpGateway } from "../src/infrastructure/clickup/ClickUpGateway.js";
 import { registerTools } from "../src/mcp/tools/registerTools.js";
 
-type GatewayStub = Pick<ClickUpGateway, "search_docs" | "fetch_tasks_for_index" | "get_task_by_id">;
+type GatewayStub = Pick<ClickUpGateway, "search_docs" | "fetch_tasks_for_index" | "get_task_by_id" | "get_doc_page">;
 
 describe("doc search tools", () => {
   const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false };
@@ -41,6 +41,9 @@ describe("doc search tools", () => {
       },
       async get_task_by_id() {
         return {};
+      },
+      async get_doc_page() {
+        return {};
       }
     };
     const cache = new ApiCache(makeMemoryKV());
@@ -71,6 +74,60 @@ describe("doc search tools", () => {
     expect(item.visibility).toBe("PUBLIC");
   });
 
+  it("expands inline page content when requested", async () => {
+    const get_doc_page = vi
+      .fn()
+      .mockResolvedValueOnce({ content: "<p>One</p>" })
+      .mockResolvedValueOnce({ content: "<p>Two</p>" });
+    const gateway: GatewayStub = {
+      async search_docs() {
+        return {
+          total: 3,
+          items: [
+            { doc_id: "D1", page_id: "P1", title: "First", snippet: "a", url: "u1" },
+            { doc_id: "D2", page_id: "P2", title: "Second", snippet: "b", url: "u2" },
+            { doc_id: "D3", page_id: "P3", title: "Third", snippet: "c", url: "u3" }
+          ]
+        };
+      },
+      async fetch_tasks_for_index() {
+        return [];
+      },
+      async get_task_by_id() {
+        return {};
+      },
+      get_doc_page
+    };
+    const cache = new ApiCache(makeMemoryKV());
+    const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+    const tool = tools.find(entry => entry.name === "clickup_doc_search");
+    if (!tool) {
+      throw new Error("Tool not found");
+    }
+    const result = await tool.execute(
+      {
+        workspaceId: 1,
+        query: "expand",
+        limit: 3,
+        page: 0,
+        expandPages: true,
+        pageBody: { contentFormat: "text/html", limit: 2 }
+      },
+      { server, runtime }
+    );
+    expect(result.isError).toBe(false);
+    if (result.isError) {
+      throw new Error("Expected success result");
+    }
+    expect(get_doc_page).toHaveBeenCalledTimes(2);
+    expect(get_doc_page).toHaveBeenNthCalledWith(1, 1, "D1", "P1", "text/html");
+    expect(get_doc_page).toHaveBeenNthCalledWith(2, 1, "D2", "P2", "text/html");
+    const items = result.data.results as any[];
+    expect(items[0].content).toBe("<p>One</p>");
+    expect(items[1].content).toBe("<p>Two</p>");
+    expect(items[2].content).toBeUndefined();
+  });
+
   it("Bulk search deduplicates and sorts", async () => {
     const gateway: GatewayStub = {
       async search_docs(_workspaceId, query) {
@@ -97,6 +154,9 @@ describe("doc search tools", () => {
         return [];
       },
       async get_task_by_id() {
+        return {};
+      },
+      async get_doc_page() {
         return {};
       }
     };
@@ -145,6 +205,9 @@ describe("doc search tools", () => {
         return [];
       },
       async get_task_by_id() {
+        return {};
+      },
+      async get_doc_page() {
         return {};
       }
     };
@@ -198,6 +261,9 @@ describe("doc search tools", () => {
         return [];
       },
       async get_task_by_id() {
+        return {};
+      },
+      async get_doc_page() {
         return {};
       }
     };
