@@ -138,4 +138,88 @@ export class ClickUpGateway {
     });
     return response.data;
   }
+
+  async list_workspaces(page: number, limit: number): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl("/api/v2/team"),
+      headers: this.authHeader(),
+      params: { page, limit },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async list_spaces(teamId: number, page: number, limit: number, includeArchived: boolean): Promise<unknown> {
+    const cacheKey = this.cache.makeKey({ s: "spaces", teamId, page, limit, archived: includeArchived ? 1 : 0 });
+    const cached = await this.cache.get<unknown>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/team/${teamId}/space`),
+      headers: this.authHeader(),
+      params: { page, limit, archived: includeArchived ? "true" : "false" },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    await this.cache.put(cacheKey, response.data, 60);
+    return response.data;
+  }
+
+  async list_folders(spaceId: string, page: number, limit: number, includeArchived: boolean): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/space/${spaceId}/folder`),
+      headers: this.authHeader(),
+      params: { page, limit, archived: includeArchived ? "true" : "false" },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async list_lists_under(
+    parentType: "space" | "folder",
+    parentId: string,
+    page: number,
+    limit: number,
+    includeArchived: boolean
+  ): Promise<unknown> {
+    const path = parentType === "space" ? `/api/v2/space/${parentId}/list` : `/api/v2/folder/${parentId}/list`;
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(path),
+      headers: this.authHeader(),
+      params: { page, limit, archived: includeArchived ? "true" : "false" },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async list_tags_for_space(spaceId: string): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/space/${spaceId}/tag`),
+      headers: this.authHeader(),
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async list_members(teamId: number, page: number, limit: number): Promise<unknown> {
+    const cacheKey = this.cache.makeKey({ s: "members", teamId, page, limit });
+    const cached = await this.cache.get<unknown>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+    const response = await this.client.requestChecked({
+      method: "GET",
+      url: this.buildUrl(`/api/v2/team/${teamId}/member`),
+      headers: this.authHeader(),
+      params: { page, limit },
+      timeoutMs: this.cfg.timeoutMs
+    });
+    await this.cache.put(cacheKey, response.data, 60);
+    return response.data;
+  }
 }

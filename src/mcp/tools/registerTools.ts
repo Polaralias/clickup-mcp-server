@@ -4,7 +4,12 @@ import { z } from "zod";
 import { CHARACTER_LIMIT, PROJECT_NAME } from "../../config/constants.js";
 import type { RuntimeConfig } from "../../config/runtime.js";
 import { err, ok, Result } from "../../shared/Result.js";
-import { DocSearchInput, DocSearchOutput, BulkDocSearchInput, BulkDocSearchOutput } from "./schemas/doc.js";
+import {
+  DocSearchInput,
+  DocSearchOutput,
+  BulkDocSearchInput,
+  BulkDocSearchOutput
+} from "./schemas/doc.js";
 import {
   TaskFuzzySearchInput,
   TaskFuzzySearchOutput,
@@ -25,6 +30,26 @@ import { makeMemoryKV } from "../../shared/KV.js";
 import { HttpClient } from "../../infrastructure/http/HttpClient.js";
 import { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway.js";
 import type { ClickUpGatewayConfig, AuthScheme } from "../../infrastructure/clickup/ClickUpGateway.js";
+import {
+  ListWorkspacesInput,
+  ListSpacesInput,
+  ListFoldersInput,
+  ListListsInput,
+  ListTagsForSpaceInput,
+  ListMembersInput,
+  ResolveMembersInput,
+  ResolvePathInput,
+  WorkspaceOverviewInput
+} from "./schemas/hierarchy.js";
+import { Workspaces } from "../../application/usecases/hierarchy/Workspaces.js";
+import { Spaces } from "../../application/usecases/hierarchy/Spaces.js";
+import { Folders } from "../../application/usecases/hierarchy/Folders.js";
+import { Lists } from "../../application/usecases/hierarchy/Lists.js";
+import { Tags } from "../../application/usecases/hierarchy/Tags.js";
+import { Members } from "../../application/usecases/members/Members.js";
+import { ResolveMembers } from "../../application/usecases/members/ResolveMembers.js";
+import { ResolvePath } from "../../application/usecases/resolve/ResolvePath.js";
+import { WorkspaceOverview } from "../../application/usecases/hierarchy/WorkspaceOverview.js";
 
 type PackageMetadata = { version: string };
 
@@ -144,6 +169,95 @@ const bulkTaskFuzzySearchInputJsonSchema: JsonSchema = {
     }
   },
   required: ["queries"],
+  additionalProperties: false
+};
+
+const listWorkspacesInputJsonSchema: JsonSchema = { type: "object", properties: {}, required: [], additionalProperties: false };
+
+const listSpacesInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    includeArchived: { type: "boolean", default: false },
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+    page: { type: "integer", minimum: 0, default: 0 }
+  },
+  required: ["teamId"],
+  additionalProperties: false
+};
+
+const listFoldersInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    spaceId: { type: "string", minLength: 1 },
+    includeArchived: { type: "boolean", default: false },
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+    page: { type: "integer", minimum: 0, default: 0 }
+  },
+  required: ["spaceId"],
+  additionalProperties: false
+};
+
+const listListsInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    parentType: { type: "string", enum: ["space", "folder"] },
+    parentId: { type: "string", minLength: 1 },
+    includeArchived: { type: "boolean", default: false },
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+    page: { type: "integer", minimum: 0, default: 0 }
+  },
+  required: ["parentType", "parentId"],
+  additionalProperties: false
+};
+
+const listTagsInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    spaceId: { type: "string", minLength: 1 }
+  },
+  required: ["spaceId"],
+  additionalProperties: false
+};
+
+const listMembersInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+    page: { type: "integer", minimum: 0, default: 0 }
+  },
+  required: ["teamId"],
+  additionalProperties: false
+};
+
+const resolveMembersInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    queries: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, maxItems: 50 }
+  },
+  required: ["teamId", "queries"],
+  additionalProperties: false
+};
+
+const resolvePathInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    path: { type: "string", minLength: 1 }
+  },
+  required: ["teamId", "path"],
+  additionalProperties: false
+};
+
+const workspaceOverviewInputJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    teamId: { type: "integer", minimum: 1 },
+    includeArchived: { type: "boolean", default: false }
+  },
+  required: ["teamId"],
   additionalProperties: false
 };
 
@@ -382,6 +496,87 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     execute: async (input, context) => bulkTaskSearch.execute(context, input as BulkTaskFuzzySearchInputType)
   };
   register(bulkTaskTool);
+  const workspaces = new Workspaces(gateway);
+  const spacesUseCase = new Spaces(gateway);
+  const foldersUseCase = new Folders(gateway);
+  const listsUseCase = new Lists(gateway);
+  const tagsUseCase = new Tags(gateway);
+  const membersUseCase = new Members(gateway);
+  const resolveMembersUseCase = new ResolveMembers(gateway);
+  const resolvePathUseCase = new ResolvePath(gateway);
+  const overviewUseCase = new WorkspaceOverview(gateway);
+  register({
+    name: "clickup_list_workspaces",
+    description: "List workspaces",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ListWorkspacesInput,
+    inputJsonSchema: listWorkspacesInputJsonSchema,
+    execute: async (input, context) => workspaces.execute(context, input as z.infer<typeof ListWorkspacesInput>)
+  });
+  register({
+    name: "clickup_list_spaces",
+    description: "List spaces for a team",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ListSpacesInput,
+    inputJsonSchema: listSpacesInputJsonSchema,
+    execute: async (input, context) => spacesUseCase.execute(context, input as z.infer<typeof ListSpacesInput>)
+  });
+  register({
+    name: "clickup_list_folders",
+    description: "List folders in a space",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ListFoldersInput,
+    inputJsonSchema: listFoldersInputJsonSchema,
+    execute: async (input, context) => foldersUseCase.execute(context, input as z.infer<typeof ListFoldersInput>)
+  });
+  register({
+    name: "clickup_list_lists",
+    description: "List lists under a space or folder",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ListListsInput,
+    inputJsonSchema: listListsInputJsonSchema,
+    execute: async (input, context) => listsUseCase.execute(context, input as z.infer<typeof ListListsInput>)
+  });
+  register({
+    name: "clickup_list_tags_for_space",
+    description: "Tags configured at space level",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ListTagsForSpaceInput,
+    inputJsonSchema: listTagsInputJsonSchema,
+    execute: async (input, context) => tagsUseCase.execute(context, input as z.infer<typeof ListTagsForSpaceInput>)
+  });
+  register({
+    name: "clickup_list_members",
+    description: "Members in a team",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ListMembersInput,
+    inputJsonSchema: listMembersInputJsonSchema,
+    execute: async (input, context) => membersUseCase.execute(context, input as z.infer<typeof ListMembersInput>)
+  });
+  register({
+    name: "clickup_resolve_members",
+    description: "Resolve names/emails to member IDs",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ResolveMembersInput,
+    inputJsonSchema: resolveMembersInputJsonSchema,
+    execute: async (input, context) => resolveMembersUseCase.execute(context, input as z.infer<typeof ResolveMembersInput>)
+  });
+  register({
+    name: "clickup_resolve_path_to_ids",
+    description: "Resolve Workspace/Space/Folder/List to IDs",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: ResolvePathInput,
+    inputJsonSchema: resolvePathInputJsonSchema,
+    execute: async (input, context) => resolvePathUseCase.execute(context, input as z.infer<typeof ResolvePathInput>)
+  });
+  register({
+    name: "clickup_get_workspace_overview",
+    description: "Compact hierarchy tree for planning",
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+    inputSchema: WorkspaceOverviewInput,
+    inputJsonSchema: workspaceOverviewInputJsonSchema,
+    execute: async (input, context) => overviewUseCase.execute(context, input as z.infer<typeof WorkspaceOverviewInput>)
+  });
   const catalogueTool: RegisteredTool<CatalogueOutputType> = {
     name: "tool_catalogue",
     description: "List all available tools with annotations and examples",
