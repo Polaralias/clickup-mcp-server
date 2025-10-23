@@ -692,7 +692,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const createTaskTool: RegisteredTool<CreateTaskOutputType> = {
     name: "clickup_create_task",
     description: "Create a task in a list with optional assignees, dates, and tags",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: CreateTaskInput,
     inputJsonSchema: createTaskInputJsonSchema,
     execute: async (input, context) => createTaskUsecase.execute(context, input as z.infer<typeof CreateTaskInput>)
@@ -710,7 +710,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const duplicateTaskTool: RegisteredTool<CreateTaskOutputType> = {
     name: "clickup_duplicate_task",
     description: "Duplicate a task with control over included elements",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: DuplicateTaskInput,
     inputJsonSchema: duplicateTaskInputJsonSchema,
     execute: async (input, context) => duplicateTaskUsecase.execute(context, input as z.infer<typeof DuplicateTaskInput>)
@@ -737,7 +737,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const commentTaskTool: RegisteredTool<CommentTaskOutputType> = {
     name: "clickup_comment_task",
     description: "Add a markdown comment to a task",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: CommentTaskInput,
     inputJsonSchema: commentTaskInputJsonSchema,
     execute: async (input, context) => commentTaskUsecase.execute(context, input as z.infer<typeof CommentTaskInput>)
@@ -746,7 +746,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const attachFileTool: RegisteredTool<AttachFileToTaskOutputType> = {
     name: "clickup_attach_file_to_task",
     description: "Attach a small file to a task via data URI",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: AttachFileToTaskInput,
     inputJsonSchema: attachFileToTaskInputJsonSchema,
     execute: async (input, context) => attachFileUsecase.execute(context, input as z.infer<typeof AttachFileToTaskInput>)
