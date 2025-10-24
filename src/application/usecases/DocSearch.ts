@@ -6,7 +6,7 @@ import { mapHttpError } from "../../shared/Errors.js";
 import type { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import type { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway.js";
 import { BulkProcessor, type WorkItem } from "../services/BulkProcessor.js";
-import { createLogger } from "../../shared/Logger.js";
+import { createLogger } from "../../shared/logging.js";
 
 const visibilityValues = new Set(["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"]);
 
@@ -223,7 +223,7 @@ export class DocSearch {
         const slice = results.slice(0, limitCount);
         const targets = slice.filter(item => item.docId.length > 0 && item.pageId.length > 0);
         if (targets.length > 0) {
-          const logger = createLogger("info");
+          const logger = createLogger("application.doc_search");
           const processor = new BulkProcessor(logger);
           const workItems: WorkItem<PageFetchResult>[] = targets.map((item, workIndex) => {
             return async () => {

@@ -1,6 +1,6 @@
 import { ApiCache } from "../cache/ApiCache.js";
 import { HttpClient } from "../http/HttpClient.js";
-import { createLogger } from "../../shared/Logger.js";
+import { createLogger } from "../../shared/logging.js";
 
 export type AuthScheme = "auto" | "oauth" | "personal_token";
 
@@ -12,7 +12,7 @@ export type ClickUpGatewayConfig = {
   defaultTeamId: number;
 };
 
-const logger = createLogger("info");
+const logger = createLogger("infra.clickup.gateway");
 
 function normaliseBaseUrl(baseUrl: string): string {
   if (baseUrl.endsWith("/")) {

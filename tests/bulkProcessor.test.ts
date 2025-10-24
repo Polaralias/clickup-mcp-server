@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import "./setup.js";
 import { BulkProcessor, type WorkItem } from "../src/application/services/BulkProcessor.js";
-import { createLogger } from "../src/shared/Logger.js";
+import { createLogger } from "../src/shared/logging.js";
 
 type BatchLog = {
   event: string;
@@ -17,12 +17,12 @@ type BatchLog = {
 
 describe("BulkProcessor", () => {
   let events: BatchLog[];
-  let originalWrite: typeof process.stderr.write;
+  let originalWrite: typeof process.stdout.write;
 
   beforeEach(() => {
     events = [];
-    originalWrite = process.stderr.write;
-    process.stderr.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding | ((err?: Error | null) => void), cb?: (err?: Error | null) => void) => {
+    originalWrite = process.stdout.write;
+    process.stdout.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding | ((err?: Error | null) => void), cb?: (err?: Error | null) => void) => {
       const text =
         typeof chunk === "string"
           ? chunk
@@ -43,15 +43,15 @@ describe("BulkProcessor", () => {
         callback(null);
       }
       return true;
-    }) as unknown as typeof process.stderr.write;
+    }) as unknown as typeof process.stdout.write;
   });
 
   afterEach(() => {
-    process.stderr.write = originalWrite;
+    process.stdout.write = originalWrite;
   });
 
   it("controls concurrency", async () => {
-    const logger = createLogger("info");
+    const logger = createLogger("tests.bulk_processor");
     const processor = new BulkProcessor(logger);
     const items: WorkItem<number>[] = Array.from({ length: 6 }, (_, index) => {
       return async () => {
@@ -79,7 +79,7 @@ describe("BulkProcessor", () => {
   });
 
   it("retries on failure and succeeds", async () => {
-    const logger = createLogger("info");
+    const logger = createLogger("tests.bulk_processor");
     const processor = new BulkProcessor(logger);
     let attempts = 0;
     const items: WorkItem<string>[] = [
@@ -109,7 +109,7 @@ describe("BulkProcessor", () => {
   });
 
   it("stops after first failure when continueOnError is false", async () => {
-    const logger = createLogger("info");
+    const logger = createLogger("tests.bulk_processor");
     const processor = new BulkProcessor(logger);
     const started: number[] = [];
     const items: WorkItem<number>[] = [

@@ -9,7 +9,7 @@ import { Result, ok, err } from "../../shared/Result.js";
 import { characterLimit, maxBulkConcurrency } from "../../config/runtime.js";
 import { TaskFuzzySearch } from "./TaskFuzzySearch.js";
 import { BulkProcessor, type WorkItem } from "../services/BulkProcessor.js";
-import { createLogger } from "../../shared/Logger.js";
+import { createLogger } from "../../shared/logging.js";
 
 type FailureCodeMap = Map<number, string | undefined>;
 
@@ -171,7 +171,7 @@ export class BulkTaskFuzzySearch {
       const empty: BulkTaskFuzzySearchOutputType = { perQuery: {}, union: { results: [], dedupedCount: 0 }, failed: [] };
       return ok(empty, false);
     }
-    const logger = createLogger("info");
+    const logger = createLogger("application.bulk_task_fuzzy_search");
     const processor = new BulkProcessor(logger);
     const failures: FailureCodeMap = new Map();
     const workItems: WorkItem<QuerySuccess>[] = queries.map((query, index) => {
