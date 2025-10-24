@@ -83,11 +83,12 @@ export const UpdateDocPageInput = z
     pageId: z.string().min(1),
     contentFormat: z.enum(["text/md", "text/html", "application/json"]).default("text/md"),
     content: z.string().min(1),
-    title: z.string().optional()
+    title: z.string().optional(),
+    dryRun: z.boolean().optional()
   })
   .strict();
 
-export const UpdateDocPageOutput = z
+const UpdateDocPageExecutionOutput = z
   .object({
     docId: z.string(),
     pageId: z.string(),
@@ -96,3 +97,23 @@ export const UpdateDocPageOutput = z
     guidance: z.string().optional()
   })
   .strict();
+
+const UpdateDocPageDryRunOutput = z
+  .object({
+    dryRun: z.literal(true),
+    preview: z
+      .object({
+        workspaceId: z.number().int().positive(),
+        docId: z.string(),
+        pageId: z.string(),
+        body: z.record(z.unknown())
+      })
+      .strict(),
+    truncated: z.boolean().optional(),
+    guidance: z.string().optional()
+  })
+  .strict();
+
+export const UpdateDocPageOutput = z.union([UpdateDocPageExecutionOutput, UpdateDocPageDryRunOutput]);
+
+export type UpdateDocPageSuccessOutput = z.infer<typeof UpdateDocPageExecutionOutput>;
