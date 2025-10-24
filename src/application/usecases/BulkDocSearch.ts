@@ -186,7 +186,11 @@ export class BulkDocSearch {
     const limit = data.options.limit ?? 20;
     const page = data.options.page ?? 0;
     const concurrencyCap = Math.max(1, maxBulkConcurrency());
-    const requestedConcurrency = Math.max(Math.trunc(data.options.concurrency ?? 5), 1);
+    const defaultConcurrency = Math.min(5, concurrencyCap);
+    const requestedConcurrency = Math.max(
+      Math.trunc(data.options.concurrency ?? defaultConcurrency),
+      1
+    );
     if (requestedConcurrency > concurrencyCap) {
       return err(
         "LIMIT_EXCEEDED",
