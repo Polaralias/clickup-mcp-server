@@ -112,6 +112,7 @@ import { ResolveMembers } from "../../application/usecases/members/ResolveMember
 import { ResolvePath } from "../../application/usecases/resolve/ResolvePath.js";
 import { WorkspaceOverview } from "../../application/usecases/hierarchy/WorkspaceOverview.js";
 import { buildCatalogue, type ToolDef } from "./catalogue.js";
+import { withSafetyConfirmation } from "../middleware/Safety.js";
 
 type PackageMetadata = { version: string };
 
@@ -990,7 +991,9 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: DeleteTaskInput,
     inputJsonSchema: deleteTaskInputJsonSchema,
-    execute: async (input, context) => deleteTaskUsecase.execute(context, input as z.infer<typeof DeleteTaskInput>)
+    execute: withSafetyConfirmation<CreateTaskOutputType>(async (input, context) =>
+      deleteTaskUsecase.execute(context, input as z.infer<typeof DeleteTaskInput>)
+    )
   };
   register(deleteTaskTool);
   const searchTasksTool: RegisteredTool<SearchTasksOutputType> = {
@@ -1080,7 +1083,9 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: DeleteEntryInput,
     inputJsonSchema: deleteTimeEntryInputJsonSchema,
-    execute: async (input, context) => deleteEntryUsecase.execute(context, input as z.infer<typeof DeleteEntryInput>)
+    execute: withSafetyConfirmation<TimerOutputType>(async (input, context) =>
+      deleteEntryUsecase.execute(context, input as z.infer<typeof DeleteEntryInput>)
+    )
   };
   register(deleteEntryTool);
   const listEntriesTool: RegisteredTool<ListEntriesOutputType> = {
