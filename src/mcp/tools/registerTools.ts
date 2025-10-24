@@ -916,7 +916,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const createDocTool: RegisteredTool<CreateDocOutputType> = {
     name: "clickup_create_doc",
     description: "Create a doc in a workspace",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: CreateDocInput,
     inputJsonSchema: createDocInputJsonSchema,
     execute: async (input, context) => createDocUsecase.execute(context, input as z.infer<typeof CreateDocInput>)
@@ -943,7 +943,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const updateDocPageTool: RegisteredTool<UpdateDocPageOutputType> = {
     name: "clickup_update_doc_page",
     description: "Update a page’s content and optionally title",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: UpdateDocPageInput,
     inputJsonSchema: updateDocPageInputJsonSchema,
     execute: async (input, context) => updateDocPageUsecase.execute(context, input as z.infer<typeof UpdateDocPageInput>)
@@ -952,7 +952,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const updateTool: RegisteredTool<UpdateTaskOutputType> = {
     name: "clickup_update_task",
     description: "Update a task and optionally set custom fields, append to description, and add a comment",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: UpdateTaskInput,
     inputJsonSchema: updateTaskInputJsonSchema,
     execute: async (input, context) => updateTaskUsecase.execute(context, input as z.infer<typeof UpdateTaskInput>)
@@ -961,7 +961,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const createTaskTool: RegisteredTool<CreateTaskOutputType> = {
     name: "clickup_create_task",
     description: "Create a task in a list with optional assignees, dates, and tags",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: CreateTaskInput,
     inputJsonSchema: createTaskInputJsonSchema,
     execute: async (input, context) => createTaskUsecase.execute(context, input as z.infer<typeof CreateTaskInput>)
@@ -970,7 +970,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const moveTaskTool: RegisteredTool<CreateTaskOutputType> = {
     name: "clickup_move_task",
     description: "Move a task to another list",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: MoveTaskInput,
     inputJsonSchema: moveTaskInputJsonSchema,
     execute: async (input, context) => moveTaskUsecase.execute(context, input as z.infer<typeof MoveTaskInput>)
@@ -979,7 +979,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const duplicateTaskTool: RegisteredTool<CreateTaskOutputType> = {
     name: "clickup_duplicate_task",
     description: "Duplicate a task with control over included elements",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: DuplicateTaskInput,
     inputJsonSchema: duplicateTaskInputJsonSchema,
     execute: async (input, context) => duplicateTaskUsecase.execute(context, input as z.infer<typeof DuplicateTaskInput>)
@@ -1008,7 +1008,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const commentTaskTool: RegisteredTool<CommentTaskOutputType> = {
     name: "clickup_comment_task",
     description: "Add a markdown comment to a task",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: CommentTaskInput,
     inputJsonSchema: commentTaskInputJsonSchema,
     execute: async (input, context) => commentTaskUsecase.execute(context, input as z.infer<typeof CommentTaskInput>)
@@ -1017,7 +1017,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const attachFileTool: RegisteredTool<AttachFileToTaskOutputType> = {
     name: "clickup_attach_file_to_task",
     description: "Attach a small file to a task via data URI",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: AttachFileToTaskInput,
     inputJsonSchema: attachFileToTaskInputJsonSchema,
     execute: async (input, context) => attachFileUsecase.execute(context, input as z.infer<typeof AttachFileToTaskInput>)
@@ -1026,7 +1026,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const addTagsTool: RegisteredTool<TagsOutputType> = {
     name: "clickup_add_tags_to_task",
     description: "Add one or more tags without replacing others",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: AddTagsToTaskInput,
     inputJsonSchema: addTagsToTaskInputJsonSchema,
     execute: async (input, context) => addTagsUsecase.execute(context, input as z.infer<typeof AddTagsToTaskInput>)
@@ -1035,7 +1035,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const removeTagsTool: RegisteredTool<TagsOutputType> = {
     name: "clickup_remove_tags_from_task",
     description: "Remove one or more tags from a task",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: RemoveTagsFromTaskInput,
     inputJsonSchema: removeTagsFromTaskInputJsonSchema,
     execute: async (input, context) => removeTagsUsecase.execute(context, input as z.infer<typeof RemoveTagsFromTaskInput>)
@@ -1044,7 +1044,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const startTimerTool: RegisteredTool<TimerOutputType> = {
     name: "clickup_start_timer",
     description: "Start a running timer on a task",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: StartTimerInput,
     inputJsonSchema: startTimerInputJsonSchema,
     execute: async (input, context) => startTimerUsecase.execute(context, input as z.infer<typeof StartTimerInput>)
@@ -1053,7 +1053,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const stopTimerTool: RegisteredTool<TimerOutputType> = {
     name: "clickup_stop_timer",
     description: "Stop a running timer on a task",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: StopTimerInput,
     inputJsonSchema: stopTimerInputJsonSchema,
     execute: async (input, context) => stopTimerUsecase.execute(context, input as z.infer<typeof StopTimerInput>)
@@ -1062,7 +1062,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const createEntryTool: RegisteredTool<TimerOutputType> = {
     name: "clickup_create_time_entry",
     description: "Create a manual time entry",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: CreateEntryInput,
     inputJsonSchema: createTimeEntryInputJsonSchema,
     execute: async (input, context) => createEntryUsecase.execute(context, input as z.infer<typeof CreateEntryInput>)
@@ -1071,7 +1071,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const updateEntryTool: RegisteredTool<TimerOutputType> = {
     name: "clickup_update_time_entry",
     description: "Update a manual time entry",
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
     inputSchema: UpdateEntryInput,
     inputJsonSchema: updateTimeEntryInputJsonSchema,
     execute: async (input, context) => updateEntryUsecase.execute(context, input as z.infer<typeof UpdateEntryInput>)
