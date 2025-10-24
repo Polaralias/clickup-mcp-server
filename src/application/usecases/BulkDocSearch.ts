@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BulkDocSearchInput, BulkDocSearchOutput, DocSearchInput, DocSearchOutput, DocSearchItem } from "../../mcp/tools/schemas/doc.js";
 import { Result, ok, err } from "../../shared/Result.js";
-import { characterLimit } from "../../config/runtime.js";
+import { characterLimit, maxBulkConcurrency } from "../../config/runtime.js";
 import { BulkProcessor, type WorkItem } from "../services/BulkProcessor.js";
 import type { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway.js";
 import type { ApiCache } from "../../infrastructure/cache/ApiCache.js";
@@ -185,7 +185,15 @@ export class BulkDocSearch {
     const data = parsed.data;
     const limit = data.options.limit ?? 20;
     const page = data.options.page ?? 0;
-    const concurrency = Math.min(Math.max(Math.trunc(data.options.concurrency ?? 5), 1), 10);
+    const concurrencyCap = Math.max(1, maxBulkConcurrency());
+    const requestedConcurrency = Math.max(Math.trunc(data.options.concurrency ?? 5), 1);
+    if (requestedConcurrency > concurrencyCap) {
+      return err(
+        "LIMIT_EXCEEDED",
+        `Requested concurrency ${requestedConcurrency} exceeds cap ${concurrencyCap}`
+      );
+    }
+    const concurrency = Math.min(requestedConcurrency, concurrencyCap);
     const retryCount = Math.min(Math.max(Math.trunc(data.options.retryCount ?? 2), 0), 6);
     const retryDelayMs = data.options.retryDelayMs ?? 200;
     const exponentialBackoff = data.options.exponentialBackoff ?? true;

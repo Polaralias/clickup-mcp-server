@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AttachFileToTaskInput, AttachFileToTaskOutput } from "../../../mcp/tools/schemas/taskCrud.js";
 import { Result, ok, err } from "../../../shared/Result.js";
 import { mapHttpError } from "../../../shared/Errors.js";
-import { characterLimit } from "../../../config/runtime.js";
+import { characterLimit, maxAttachmentBytes } from "../../../config/runtime.js";
 import type { ClickUpGateway } from "../../../infrastructure/clickup/ClickUpGateway.js";
 
 type InputType = z.infer<typeof AttachFileToTaskInput>;
@@ -11,8 +11,6 @@ type OutputType = z.infer<typeof AttachFileToTaskOutput>;
 type HttpErrorLike = { status?: number; data?: unknown };
 
 type TaskRefLike = { taskId?: string; url?: string };
-
-const MAX_ATTACHMENT_SIZE = 8 * 1024 * 1024;
 
 function toId(value: unknown): string | undefined {
   if (typeof value === "string" && value.length > 0) {
@@ -220,8 +218,10 @@ export class AttachFileToTask {
     if (!parsedDataUri) {
       return err("INVALID_PARAMETER", "Attachment must be provided as base64 data URI");
     }
-    if (parsedDataUri.size > MAX_ATTACHMENT_SIZE) {
-      return err("INVALID_PARAMETER", "Attachment exceeds 8 MB");
+    const limitBytes = maxAttachmentBytes();
+    if (parsedDataUri.size > limitBytes) {
+      const limitMb = Math.max(1, Math.round(limitBytes / (1024 * 1024)));
+      return err("LIMIT_EXCEEDED", `Attachment exceeds ${limitMb} MB`);
     }
     try {
       const response = await this.gateway.attach_file_to_task(data.taskId, data.dataUri, data.name);
