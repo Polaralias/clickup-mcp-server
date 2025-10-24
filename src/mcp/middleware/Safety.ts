@@ -1,5 +1,5 @@
 import { err, type Result, type ToolError } from "../../shared/Result.js";
-import { clickupError } from "../../shared/errors.js";
+import { clickupError } from "../../shared/Errors.js";
 
 type ToolExecutor<TOutput> = (input: unknown, context: unknown) => Promise<Result<TOutput>>;
 
