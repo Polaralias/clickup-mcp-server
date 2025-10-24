@@ -1,3 +1,5 @@
+import { maxBulkConcurrency } from "../../config/runtime.js";
+
 export type WorkItem<T> = () => Promise<T>;
 
 export type BatchOptions = {
@@ -39,8 +41,9 @@ export class BulkProcessor {
   constructor(private readonly logger: { info: (msg: string, extras?: Record<string, unknown>) => void }) {}
 
   async run<T>(items: WorkItem<T>[], opts: Partial<BatchOptions>): Promise<BatchResult<T>> {
+    const concurrencyCap = Math.max(1, maxBulkConcurrency());
     const defaults: BatchOptions = {
-      concurrency: 5,
+      concurrency: Math.min(5, concurrencyCap),
       retryCount: 0,
       retryDelayMs: 200,
       exponentialBackoff: true,
@@ -49,7 +52,7 @@ export class BulkProcessor {
     const total = items.length;
     const startTime = Date.now();
     const options: BatchOptions = {
-      concurrency: clamp(toInt(opts.concurrency, defaults.concurrency), 1, 10),
+      concurrency: clamp(toInt(opts.concurrency, defaults.concurrency), 1, concurrencyCap),
       retryCount: clamp(toInt(opts.retryCount, defaults.retryCount), 0, 6),
       retryDelayMs: typeof opts.retryDelayMs === "number" && Number.isFinite(opts.retryDelayMs)
         ? opts.retryDelayMs

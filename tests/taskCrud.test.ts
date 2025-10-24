@@ -260,7 +260,8 @@ describe("Task CRUD usecases", () => {
     if (!largeResult.isError) {
       throw new Error("Expected failure result");
     }
-    expect(largeResult.code).toBe("INVALID_PARAMETER");
+    expect(largeResult.code).toBe("LIMIT_EXCEEDED");
+    expect(largeResult.message).toBe("Attachment exceeds 8 MB");
 
     const attachment = { attach_file_to_task: vi.fn().mockResolvedValue({ attachment: { id: "ATT1" }, task: { id: "T601" } }) };
     const attachUsecase = new AttachFileToTask(attachment as unknown as ClickUpGateway);
