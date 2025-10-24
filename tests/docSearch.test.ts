@@ -274,8 +274,8 @@ describe("doc search tools", () => {
       throw new Error("Tool not found");
     }
     const events: { event: string }[] = [];
-    const originalWrite = process.stderr.write;
-    process.stderr.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding | ((err?: Error | null) => void), cb?: (err?: Error | null) => void) => {
+    const originalWrite = process.stdout.write;
+    process.stdout.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding | ((err?: Error | null) => void), cb?: (err?: Error | null) => void) => {
       const text =
         typeof chunk === "string"
           ? chunk
@@ -296,7 +296,7 @@ describe("doc search tools", () => {
         callback(null);
       }
       return true;
-    }) as unknown as typeof process.stderr.write;
+    }) as unknown as typeof process.stdout.write;
     try {
       const promise = tool.execute(
         {
@@ -319,7 +319,7 @@ describe("doc search tools", () => {
       const retried = events.filter(entry => entry.event === "retried");
       expect(retried.length).toBe(1);
     } finally {
-      process.stderr.write = originalWrite;
+      process.stdout.write = originalWrite;
     }
   });
 });

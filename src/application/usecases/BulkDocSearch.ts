@@ -6,7 +6,7 @@ import { BulkProcessor, type WorkItem } from "../services/BulkProcessor.js";
 import type { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway.js";
 import type { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import { DocSearch } from "./DocSearch.js";
-import { createLogger } from "../../shared/Logger.js";
+import { createLogger } from "../../shared/logging.js";
 
 type DocSearchOutputType = z.infer<typeof DocSearchOutput>;
 type DocSearchItemType = z.infer<typeof DocSearchItem>;
@@ -203,7 +203,7 @@ export class BulkDocSearch {
       const empty: BulkDocSearchOutputType = { perQuery: {}, union: { results: [], dedupedCount: 0 }, failed: [] };
       return ok(empty, false);
     }
-    const logger = createLogger("info");
+    const logger = createLogger("application.bulk_doc_search");
     const processor = new BulkProcessor(logger);
     const failures: FailureCodeMap = new Map();
     const workItems: WorkItem<QuerySuccess>[] = queries.map((query, index) => {
