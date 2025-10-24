@@ -17,12 +17,12 @@ type BatchLog = {
 
 describe("BulkProcessor", () => {
   let events: BatchLog[];
-  let originalWrite: typeof process.stdout.write;
+  let originalWrite: typeof process.stderr.write;
 
   beforeEach(() => {
     events = [];
-    originalWrite = process.stdout.write;
-    process.stdout.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding | ((err?: Error | null) => void), cb?: (err?: Error | null) => void) => {
+    originalWrite = process.stderr.write;
+    process.stderr.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding | ((err?: Error | null) => void), cb?: (err?: Error | null) => void) => {
       const text =
         typeof chunk === "string"
           ? chunk
@@ -43,11 +43,11 @@ describe("BulkProcessor", () => {
         callback(null);
       }
       return true;
-    }) as unknown as typeof process.stdout.write;
+    }) as unknown as typeof process.stderr.write;
   });
 
   afterEach(() => {
-    process.stdout.write = originalWrite;
+    process.stderr.write = originalWrite;
   });
 
   it("controls concurrency", async () => {

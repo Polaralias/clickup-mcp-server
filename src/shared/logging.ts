@@ -87,7 +87,7 @@ function writeLog(level: LogLevel, subsystem: string, message: string, extras?: 
   }
   const sanitizedExtras = sanitizeExtras(extras);
   const payload = sanitizedExtras ? { ...sanitizedExtras, ...base } : base;
-  process.stdout.write(`${JSON.stringify(payload)}\n`);
+  process.stderr.write(`${JSON.stringify(payload)}\n`);
 }
 
 function sanitizeExtras(extras?: LogExtras): Record<string, unknown> | undefined {
