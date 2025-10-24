@@ -10,7 +10,8 @@ export const CreateTaskInput = z
     priority: z.union([z.string(), z.number()]).optional(),
     dueDateMs: z.number().int().nonnegative().optional(),
     timeEstimateMs: z.number().int().nonnegative().optional(),
-    tags: z.array(z.string()).max(50).optional()
+    tags: z.array(z.string()).max(50).optional(),
+    dryRun: z.boolean().optional()
   })
   .strict();
 
@@ -21,13 +22,31 @@ export const TaskRef = z
   })
   .strict();
 
-export const CreateTaskOutput = z
+const CreateTaskExecutionOutput = z
   .object({
     task: TaskRef,
     truncated: z.boolean().optional(),
     guidance: z.string().optional()
   })
   .strict();
+
+const CreateTaskDryRunOutput = z
+  .object({
+    dryRun: z.literal(true),
+    preview: z
+      .object({
+        listId: z.string(),
+        body: z.record(z.unknown())
+      })
+      .strict(),
+    truncated: z.boolean().optional(),
+    guidance: z.string().optional()
+  })
+  .strict();
+
+export const CreateTaskOutput = z.union([CreateTaskExecutionOutput, CreateTaskDryRunOutput]);
+
+export type CreateTaskSuccessOutput = z.infer<typeof CreateTaskExecutionOutput>;
 
 export const MoveTaskInput = z
   .object({

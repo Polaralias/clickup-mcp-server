@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { UpdateEntryInput, TimerOutput } from "../../../mcp/tools/schemas/time.js";
+import type { TimerSuccessOutput } from "../../../mcp/tools/schemas/time.js";
 import { Result, ok, err } from "../../../shared/Result.js";
 import { mapHttpError } from "../../../shared/Errors.js";
 import { characterLimit } from "../../../config/runtime.js";
@@ -8,6 +9,7 @@ import { extractEntryId } from "./StartTimer.js";
 
 type InputType = z.infer<typeof UpdateEntryInput>;
 type OutputType = z.infer<typeof TimerOutput>;
+type TimerSuccessOutputType = TimerSuccessOutput;
 
 type HttpErrorLike = { status?: number; data?: unknown };
 
@@ -22,7 +24,7 @@ function toEpoch(value: string | undefined): number | null {
   return parsed;
 }
 
-function enforceLimit(out: OutputType): void {
+function enforceLimit(out: TimerSuccessOutputType): void {
   const limit = characterLimit();
   const payload = JSON.stringify(out);
   if (payload.length <= limit) {
@@ -66,10 +68,14 @@ export class UpdateEntry {
     if (typeof data.billable === "boolean") {
       body.billable = data.billable;
     }
+    if (data.dryRun === true) {
+      const preview = { entryId: data.entryId, body };
+      return ok({ dryRun: true as const, preview });
+    }
     try {
       const response = await this.gateway.update_time_entry(data.entryId, body);
       const resolvedEntryId = extractEntryId(response) ?? data.entryId;
-      const out: OutputType = { entryId: resolvedEntryId };
+      const out: TimerSuccessOutputType = { entryId: resolvedEntryId };
       enforceLimit(out);
       return ok(out, out.truncated === true, out.guidance);
     } catch (error) {

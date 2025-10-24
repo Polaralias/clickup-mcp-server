@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CreateTaskInput, CreateTaskOutput } from "../../../mcp/tools/schemas/taskCrud.js";
+import type { CreateTaskSuccessOutput } from "../../../mcp/tools/schemas/taskCrud.js";
 import { Result, ok, err } from "../../../shared/Result.js";
 import { mapHttpError } from "../../../shared/Errors.js";
 import { characterLimit } from "../../../config/runtime.js";
@@ -7,6 +8,7 @@ import type { ClickUpGateway } from "../../../infrastructure/clickup/ClickUpGate
 
 type InputType = z.infer<typeof CreateTaskInput>;
 type OutputType = z.infer<typeof CreateTaskOutput>;
+type CreateTaskSuccessOutputType = CreateTaskSuccessOutput;
 
 type HttpErrorLike = { status?: number; data?: unknown };
 
@@ -105,7 +107,7 @@ function shortenField(target: unknown, path: string[]): boolean {
   return true;
 }
 
-function enforceLimit(out: OutputType): void {
+function enforceLimit(out: CreateTaskSuccessOutputType): void {
   const limit = characterLimit();
   const paths: string[][] = [["description"], ["commentMarkdown"], ["attachment", "name"]];
   let payload = JSON.stringify(out);
@@ -167,12 +169,16 @@ export class CreateTask {
     if (Array.isArray(data.tags)) {
       body.tags = data.tags;
     }
+    if (data.dryRun === true) {
+      const preview = { listId: data.listId, body };
+      return ok({ dryRun: true as const, preview });
+    }
     try {
       const response = await this.gateway.create_task(data.listId, body);
       const ref = extractTaskRef(response);
       const taskId = ref.taskId ?? data.name;
       const task = ref.url ? { taskId, url: ref.url } : { taskId };
-      const out: OutputType = { task };
+      const out: CreateTaskSuccessOutputType = { task };
       enforceLimit(out);
       return ok(out, out.truncated === true, out.guidance);
     } catch (error) {

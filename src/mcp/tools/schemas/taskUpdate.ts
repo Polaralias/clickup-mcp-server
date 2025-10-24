@@ -20,11 +20,12 @@ export const UpdateTaskInput = z
     tags: z.array(z.string()).max(50).optional(),
     customFields: z.array(CustomFieldPatch).max(25).optional(),
     appendMarkdownDescription: z.string().min(1).optional(),
-    addCommentMarkdown: z.string().min(1).optional()
+    addCommentMarkdown: z.string().min(1).optional(),
+    dryRun: z.boolean().optional()
   })
   .strict();
 
-export const UpdateTaskOutput = z
+const UpdateTaskExecutionOutput = z
   .object({
     taskId: z.string(),
     updated: z
@@ -40,3 +41,24 @@ export const UpdateTaskOutput = z
     guidance: z.string().optional()
   })
   .strict();
+
+const UpdateTaskDryRunOutput = z
+  .object({
+    dryRun: z.literal(true),
+    preview: z
+      .object({
+        taskId: z.string(),
+        coreUpdate: z.record(z.unknown()).optional(),
+        customFieldUpdates: z.array(CustomFieldPatch).max(25).optional(),
+        appendMarkdownDescription: z.string().optional(),
+        addCommentMarkdown: z.string().optional()
+      })
+      .strict(),
+    truncated: z.boolean().optional(),
+    guidance: z.string().optional()
+  })
+  .strict();
+
+export const UpdateTaskOutput = z.union([UpdateTaskExecutionOutput, UpdateTaskDryRunOutput]);
+
+export type UpdateTaskSuccessOutput = z.infer<typeof UpdateTaskExecutionOutput>;

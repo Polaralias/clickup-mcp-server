@@ -13,7 +13,7 @@ export const StopTimerInput = z
   })
   .strict();
 
-export const TimerOutput = z
+const TimerExecutionOutput = z
   .object({
     taskId: z.string(),
     started: z.boolean().optional(),
@@ -24,6 +24,24 @@ export const TimerOutput = z
     guidance: z.string().optional()
   })
   .strict();
+
+const TimerDryRunOutput = z
+  .object({
+    dryRun: z.literal(true),
+    preview: z.record(z.unknown()),
+    taskId: z.string().optional(),
+    started: z.boolean().optional(),
+    stopped: z.boolean().optional(),
+    entryId: z.string().optional(),
+    running: z.boolean().optional(),
+    truncated: z.boolean().optional(),
+    guidance: z.string().optional()
+  })
+  .strict();
+
+export const TimerOutput = z.union([TimerExecutionOutput, TimerDryRunOutput]);
+
+export type TimerSuccessOutput = z.infer<typeof TimerExecutionOutput>;
 
 export const CreateEntryInput = z
   .object({
@@ -42,7 +60,8 @@ export const UpdateEntryInput = z
     start: z.string().datetime().optional(),
     end: z.string().datetime().optional(),
     description: z.string().optional(),
-    billable: z.boolean().optional()
+    billable: z.boolean().optional(),
+    dryRun: z.boolean().optional()
   })
   .strict();
 

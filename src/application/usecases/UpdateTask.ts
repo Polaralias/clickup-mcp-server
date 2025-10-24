@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { UpdateTaskInput, UpdateTaskOutput } from "../../mcp/tools/schemas/taskUpdate.js";
+import type { UpdateTaskSuccessOutput } from "../../mcp/tools/schemas/taskUpdate.js";
 import { Result, ok, err } from "../../shared/Result.js";
 import { mapHttpError } from "../../shared/Errors.js";
 import { characterLimit } from "../../config/runtime.js";
@@ -7,6 +8,7 @@ import type { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway
 
 type UpdateTaskInputType = z.infer<typeof UpdateTaskInput>;
 type UpdateTaskOutputType = z.infer<typeof UpdateTaskOutput>;
+type UpdateTaskSuccessOutputType = UpdateTaskSuccessOutput;
 
 type HttpErrorLike = { status?: number; data?: unknown };
 
@@ -80,7 +82,7 @@ function extractUrl(payload: unknown): string | undefined {
   return undefined;
 }
 
-function enforceLimit(out: UpdateTaskOutputType): void {
+function enforceLimit(out: UpdateTaskSuccessOutputType): void {
   const limit = characterLimit();
   let payload = JSON.stringify(out);
   if (payload.length <= limit) {
@@ -134,6 +136,22 @@ export class UpdateTask {
     if (typeof data.tags !== "undefined") {
       coreUpdate.tags = data.tags;
     }
+    if (data.dryRun === true) {
+      const preview: Record<string, unknown> = { taskId: data.taskId };
+      if (Object.keys(coreUpdate).length > 0) {
+        preview.coreUpdate = coreUpdate;
+      }
+      if (Array.isArray(data.customFields) && data.customFields.length > 0) {
+        preview.customFieldUpdates = data.customFields;
+      }
+      if (typeof data.appendMarkdownDescription === "string") {
+        preview.appendMarkdownDescription = data.appendMarkdownDescription;
+      }
+      if (typeof data.addCommentMarkdown === "string") {
+        preview.addCommentMarkdown = data.addCommentMarkdown;
+      }
+      return ok({ dryRun: true as const, preview });
+    }
     let url: string | undefined;
     let didCore = false;
     let customCount = 0;
@@ -176,7 +194,7 @@ export class UpdateTask {
         await this.gateway.add_task_comment(data.taskId, data.addCommentMarkdown);
         didComment = true;
       }
-      const out: UpdateTaskOutputType = {
+      const out: UpdateTaskSuccessOutputType = {
         taskId: data.taskId,
         updated: {
           core: didCore,
