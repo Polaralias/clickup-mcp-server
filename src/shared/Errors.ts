@@ -1,3 +1,5 @@
+import { err, type ToolError } from "./Result.js";
+
 export type ErrorCode = "INVALID_PARAMETER" | "NOT_FOUND" | "RATE_LIMIT" | "UNKNOWN";
 
 type ErrorPayload = { code: ErrorCode; message: string; details?: unknown };
@@ -24,4 +26,12 @@ function attachDetails(payload: ErrorPayload, details?: unknown): ErrorPayload {
     return payload;
   }
   return { ...payload, details };
+}
+
+export function clickupError(message: string, details?: unknown): ToolError {
+  return err("CLICKUP_ERROR", message, details);
+}
+
+export function limitExceeded(message: string, details?: unknown): ToolError {
+  return err("LIMIT_EXCEEDED", message, details);
 }
