@@ -10,7 +10,7 @@ import { registerTools } from "../src/mcp/tools/registerTools.js";
 type GatewayStub = Pick<ClickUpGateway, "search_docs" | "fetch_tasks_for_index" | "get_task_by_id" | "get_doc_page">;
 
 describe("doc search tools", () => {
-  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false };
+  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } };
   const server = {} as McpServer;
 
   it("Single search maps fields and pagination", async () => {

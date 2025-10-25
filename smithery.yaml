@@ -13,6 +13,9 @@ entrypoint:
 capabilities:
   - mcp_stdio
 
+ports:
+  - "8080"
+
 environment:
   required:
     - CLICKUP_TOKEN
@@ -25,13 +28,10 @@ environment:
     - NODE_ENV
   defaults:
     NODE_ENV: production
-    MAX_ATTACHMENT_MB: "8"
-    MAX_BULK_CONCURRENCY: "10"
-    CHARACTER_LIMIT: "25000"
 
 health:
-  type: process
-  command: ["node", "--version"]
+  type: http
+  path: /healthz
 
 build:
   steps:

@@ -204,7 +204,7 @@ describe("Time tools", () => {
     }
     expect(result.data.entryId).toBe("DE1");
 
-    const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false };
+    const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } };
     const server = {} as McpServer;
     const cache = new ApiCache(makeMemoryKV());
     const registerGateway = buildGatewayStub();
