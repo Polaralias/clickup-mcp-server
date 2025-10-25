@@ -58,6 +58,9 @@ export class CreateEntry {
     if (typeof data.memberId === "number" && Number.isFinite(data.memberId)) {
       body.assignee = Math.trunc(data.memberId);
     }
+    if (data.dryRun === true) {
+      return ok({ dryRun: true as const, preview: { action: "create", taskId: data.taskId, body } });
+    }
     try {
       const response = await this.gateway.create_time_entry(data.taskId, body);
       const entryId = extractEntryId(response);

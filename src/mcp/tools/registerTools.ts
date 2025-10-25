@@ -31,7 +31,9 @@ import {
   CreateTaskInput,
   CreateTaskOutput,
   MoveTaskInput,
+  MoveTaskOutput,
   DuplicateTaskInput,
+  DuplicateTaskOutput,
   DeleteTaskInput,
   SearchTasksInput,
   SearchTasksOutput,
@@ -134,6 +136,8 @@ type BulkTaskFuzzySearchInputType = z.infer<typeof BulkTaskFuzzySearchInput>;
 type BulkTaskFuzzySearchOutputType = z.infer<typeof BulkTaskFuzzySearchOutput>;
 type UpdateTaskOutputType = z.infer<typeof UpdateTaskOutput>;
 type CreateTaskOutputType = z.infer<typeof CreateTaskOutput>;
+type MoveTaskOutputType = z.infer<typeof MoveTaskOutput>;
+type DuplicateTaskOutputType = z.infer<typeof DuplicateTaskOutput>;
 type SearchTasksOutputType = z.infer<typeof SearchTasksOutput>;
 type CommentTaskOutputType = z.infer<typeof CommentTaskOutput>;
 type AttachFileToTaskOutputType = z.infer<typeof AttachFileToTaskOutput>;
@@ -192,7 +196,9 @@ const createDocInputJsonSchema: JsonSchema = {
   properties: {
     workspaceId: { type: "integer", minimum: 1 },
     title: { type: "string", minLength: 1 },
-    visibility: { type: "string", enum: ["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"], default: "PRIVATE" }
+    visibility: { type: "string", enum: ["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"], default: "PRIVATE" },
+    confirm: { type: "string", enum: ["yes"] },
+    dryRun: { type: "boolean" }
   },
   required: ["workspaceId", "title"],
   additionalProperties: false
@@ -230,7 +236,8 @@ const updateDocPageInputJsonSchema: JsonSchema = {
     pageId: { type: "string", minLength: 1 },
     contentFormat: { type: "string", enum: ["text/md", "text/html", "application/json"], default: "text/md" },
     content: { type: "string", minLength: 1 },
-    title: { type: "string" }
+    title: { type: "string" },
+    dryRun: { type: "boolean" }
   },
   required: ["workspaceId", "docId", "pageId", "content"],
   additionalProperties: false
@@ -262,7 +269,8 @@ const updateTaskInputJsonSchema: JsonSchema = {
       }
     },
     appendMarkdownDescription: { type: "string", minLength: 1 },
-    addCommentMarkdown: { type: "string", minLength: 1 }
+    addCommentMarkdown: { type: "string", minLength: 1 },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId"],
   additionalProperties: false
@@ -279,7 +287,8 @@ const createTaskInputJsonSchema: JsonSchema = {
     priority: { anyOf: [{ type: "string" }, { type: "number" }] },
     dueDateMs: { type: "integer", minimum: 0 },
     timeEstimateMs: { type: "integer", minimum: 0 },
-    tags: { type: "array", items: { type: "string" }, maxItems: 50 }
+    tags: { type: "array", items: { type: "string" }, maxItems: 50 },
+    dryRun: { type: "boolean" }
   },
   required: ["listId", "name"],
   additionalProperties: false
@@ -289,7 +298,8 @@ const moveTaskInputJsonSchema: JsonSchema = {
   type: "object",
   properties: {
     taskId: { type: "string", minLength: 1 },
-    targetListId: { type: "string", minLength: 1 }
+    targetListId: { type: "string", minLength: 1 },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId", "targetListId"],
   additionalProperties: false
@@ -313,7 +323,8 @@ const duplicateTaskInputJsonSchema: JsonSchema = {
       required: [],
       additionalProperties: false,
       default: {}
-    }
+    },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId"],
   additionalProperties: false
@@ -333,7 +344,9 @@ const startTimerInputJsonSchema: JsonSchema = {
   type: "object",
   properties: {
     taskId: { type: "string", minLength: 1 },
-    description: { type: "string" }
+    description: { type: "string" },
+    confirm: { type: "string", enum: ["yes"] },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId"],
   additionalProperties: false
@@ -342,7 +355,9 @@ const startTimerInputJsonSchema: JsonSchema = {
 const stopTimerInputJsonSchema: JsonSchema = {
   type: "object",
   properties: {
-    taskId: { type: "string", minLength: 1 }
+    taskId: { type: "string", minLength: 1 },
+    confirm: { type: "string", enum: ["yes"] },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId"],
   additionalProperties: false
@@ -356,7 +371,8 @@ const createTimeEntryInputJsonSchema: JsonSchema = {
     start: { type: "string", format: "date-time" },
     end: { type: "string", format: "date-time" },
     description: { type: "string" },
-    billable: { type: "boolean", default: false }
+    billable: { type: "boolean", default: false },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId", "start", "end"],
   additionalProperties: false
@@ -369,7 +385,8 @@ const updateTimeEntryInputJsonSchema: JsonSchema = {
     start: { type: "string", format: "date-time" },
     end: { type: "string", format: "date-time" },
     description: { type: "string" },
-    billable: { type: "boolean" }
+    billable: { type: "boolean" },
+    dryRun: { type: "boolean" }
   },
   required: ["entryId"],
   additionalProperties: false
@@ -476,7 +493,8 @@ const commentTaskInputJsonSchema: JsonSchema = {
   type: "object",
   properties: {
     taskId: { type: "string", minLength: 1 },
-    commentMarkdown: { type: "string", minLength: 1 }
+    commentMarkdown: { type: "string", minLength: 1 },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId", "commentMarkdown"],
   additionalProperties: false
@@ -487,7 +505,9 @@ const attachFileToTaskInputJsonSchema: JsonSchema = {
   properties: {
     taskId: { type: "string", minLength: 1 },
     dataUri: { type: "string", minLength: 1 },
-    name: { type: "string", minLength: 1 }
+    name: { type: "string", minLength: 1 },
+    confirm: { type: "string", enum: ["yes"] },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId", "dataUri", "name"],
   additionalProperties: false
@@ -497,7 +517,8 @@ const addTagsToTaskInputJsonSchema: JsonSchema = {
   type: "object",
   properties: {
     taskId: { type: "string", minLength: 1 },
-    tags: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, maxItems: 50 }
+    tags: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, maxItems: 50 },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId", "tags"],
   additionalProperties: false
@@ -507,7 +528,8 @@ const removeTagsFromTaskInputJsonSchema: JsonSchema = {
   type: "object",
   properties: {
     taskId: { type: "string", minLength: 1 },
-    tags: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, maxItems: 50 }
+    tags: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1, maxItems: 50 },
+    dryRun: { type: "boolean" }
   },
   required: ["taskId", "tags"],
   additionalProperties: false
@@ -916,10 +938,12 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const createDocTool: RegisteredTool<CreateDocOutputType> = {
     name: "clickup_create_doc",
     description: "Create a doc in a workspace",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: CreateDocInput,
     inputJsonSchema: createDocInputJsonSchema,
-    execute: async (input, context) => createDocUsecase.execute(context, input as z.infer<typeof CreateDocInput>)
+    execute: withSafetyConfirmation<CreateDocOutputType>(async (input, context) =>
+      createDocUsecase.execute(context, input as z.infer<typeof CreateDocInput>)
+    )
   };
   register(createDocTool);
   const listDocPagesTool: RegisteredTool<ListDocPagesOutputType> = {
@@ -943,7 +967,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const updateDocPageTool: RegisteredTool<UpdateDocPageOutputType> = {
     name: "clickup_update_doc_page",
     description: "Update a page’s content and optionally title",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: UpdateDocPageInput,
     inputJsonSchema: updateDocPageInputJsonSchema,
     execute: async (input, context) => updateDocPageUsecase.execute(context, input as z.infer<typeof UpdateDocPageInput>)
@@ -961,25 +985,25 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const createTaskTool: RegisteredTool<CreateTaskOutputType> = {
     name: "clickup_create_task",
     description: "Create a task in a list with optional assignees, dates, and tags",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: CreateTaskInput,
     inputJsonSchema: createTaskInputJsonSchema,
     execute: async (input, context) => createTaskUsecase.execute(context, input as z.infer<typeof CreateTaskInput>)
   };
   register(createTaskTool);
-  const moveTaskTool: RegisteredTool<CreateTaskOutputType> = {
+  const moveTaskTool: RegisteredTool<MoveTaskOutputType> = {
     name: "clickup_move_task",
     description: "Move a task to another list",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: MoveTaskInput,
     inputJsonSchema: moveTaskInputJsonSchema,
     execute: async (input, context) => moveTaskUsecase.execute(context, input as z.infer<typeof MoveTaskInput>)
   };
   register(moveTaskTool);
-  const duplicateTaskTool: RegisteredTool<CreateTaskOutputType> = {
+  const duplicateTaskTool: RegisteredTool<DuplicateTaskOutputType> = {
     name: "clickup_duplicate_task",
     description: "Duplicate a task with control over included elements",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: DuplicateTaskInput,
     inputJsonSchema: duplicateTaskInputJsonSchema,
     execute: async (input, context) => duplicateTaskUsecase.execute(context, input as z.infer<typeof DuplicateTaskInput>)
@@ -1008,7 +1032,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const commentTaskTool: RegisteredTool<CommentTaskOutputType> = {
     name: "clickup_comment_task",
     description: "Add a markdown comment to a task",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: CommentTaskInput,
     inputJsonSchema: commentTaskInputJsonSchema,
     execute: async (input, context) => commentTaskUsecase.execute(context, input as z.infer<typeof CommentTaskInput>)
@@ -1017,16 +1041,18 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const attachFileTool: RegisteredTool<AttachFileToTaskOutputType> = {
     name: "clickup_attach_file_to_task",
     description: "Attach a small file to a task via data URI",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: AttachFileToTaskInput,
     inputJsonSchema: attachFileToTaskInputJsonSchema,
-    execute: async (input, context) => attachFileUsecase.execute(context, input as z.infer<typeof AttachFileToTaskInput>)
+    execute: withSafetyConfirmation<AttachFileToTaskOutputType>(async (input, context) =>
+      attachFileUsecase.execute(context, input as z.infer<typeof AttachFileToTaskInput>)
+    )
   };
   register(attachFileTool);
   const addTagsTool: RegisteredTool<TagsOutputType> = {
     name: "clickup_add_tags_to_task",
     description: "Add one or more tags without replacing others",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: AddTagsToTaskInput,
     inputJsonSchema: addTagsToTaskInputJsonSchema,
     execute: async (input, context) => addTagsUsecase.execute(context, input as z.infer<typeof AddTagsToTaskInput>)
@@ -1035,7 +1061,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const removeTagsTool: RegisteredTool<TagsOutputType> = {
     name: "clickup_remove_tags_from_task",
     description: "Remove one or more tags from a task",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: RemoveTagsFromTaskInput,
     inputJsonSchema: removeTagsFromTaskInputJsonSchema,
     execute: async (input, context) => removeTagsUsecase.execute(context, input as z.infer<typeof RemoveTagsFromTaskInput>)
@@ -1044,25 +1070,29 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const startTimerTool: RegisteredTool<TimerOutputType> = {
     name: "clickup_start_timer",
     description: "Start a running timer on a task",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: StartTimerInput,
     inputJsonSchema: startTimerInputJsonSchema,
-    execute: async (input, context) => startTimerUsecase.execute(context, input as z.infer<typeof StartTimerInput>)
+    execute: withSafetyConfirmation<TimerOutputType>(async (input, context) =>
+      startTimerUsecase.execute(context, input as z.infer<typeof StartTimerInput>)
+    )
   };
   register(startTimerTool);
   const stopTimerTool: RegisteredTool<TimerOutputType> = {
     name: "clickup_stop_timer",
     description: "Stop a running timer on a task",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: StopTimerInput,
     inputJsonSchema: stopTimerInputJsonSchema,
-    execute: async (input, context) => stopTimerUsecase.execute(context, input as z.infer<typeof StopTimerInput>)
+    execute: withSafetyConfirmation<TimerOutputType>(async (input, context) =>
+      stopTimerUsecase.execute(context, input as z.infer<typeof StopTimerInput>)
+    )
   };
   register(stopTimerTool);
   const createEntryTool: RegisteredTool<TimerOutputType> = {
     name: "clickup_create_time_entry",
     description: "Create a manual time entry",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: CreateEntryInput,
     inputJsonSchema: createTimeEntryInputJsonSchema,
     execute: async (input, context) => createEntryUsecase.execute(context, input as z.infer<typeof CreateEntryInput>)
@@ -1071,7 +1101,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const updateEntryTool: RegisteredTool<TimerOutputType> = {
     name: "clickup_update_time_entry",
     description: "Update a manual time entry",
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
     inputSchema: UpdateEntryInput,
     inputJsonSchema: updateTimeEntryInputJsonSchema,
     execute: async (input, context) => updateEntryUsecase.execute(context, input as z.infer<typeof UpdateEntryInput>)

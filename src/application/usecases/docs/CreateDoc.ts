@@ -139,8 +139,11 @@ export class CreateDoc {
       return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
     }
     const data = parsed.data;
+    const body = { title: data.title, visibility: data.visibility };
+    if (data.dryRun === true) {
+      return ok({ dryRun: true as const, preview: { title: body.title, visibility: body.visibility } });
+    }
     try {
-      const body = { title: data.title, visibility: data.visibility };
       const response = await this.gateway.create_doc(data.workspaceId, body);
       const ref = extractDocRef(response);
       const docId = ref.docId ?? data.title;

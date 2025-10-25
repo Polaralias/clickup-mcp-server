@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { DuplicateTaskInput, CreateTaskOutput } from "../../../mcp/tools/schemas/taskCrud.js";
+import { DuplicateTaskInput, DuplicateTaskOutput } from "../../../mcp/tools/schemas/taskCrud.js";
 import { Result, ok, err } from "../../../shared/Result.js";
 import { mapHttpError } from "../../../shared/Errors.js";
 import { characterLimit } from "../../../config/runtime.js";
 import type { ClickUpGateway } from "../../../infrastructure/clickup/ClickUpGateway.js";
 
 type InputType = z.infer<typeof DuplicateTaskInput>;
-type OutputType = z.infer<typeof CreateTaskOutput>;
+type OutputType = z.infer<typeof DuplicateTaskOutput>;
 
 type HttpErrorLike = { status?: number; data?: unknown };
 
@@ -150,14 +150,14 @@ function mapInclude(include: Required<InputType["include"]>): Record<string, boo
 export class DuplicateTask {
   constructor(private readonly gateway: ClickUpGateway) {}
 
-  async execute(ctx: unknown, input: InputType): Promise<Result<z.infer<typeof CreateTaskOutput>>> {
+  async execute(ctx: unknown, input: InputType): Promise<Result<z.infer<typeof DuplicateTaskOutput>>> {
     void ctx;
     const parsed = DuplicateTaskInput.safeParse(input ?? {});
     if (!parsed.success) {
       return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
     }
     const data = parsed.data;
-    const include = mapInclude({
+    const includeConfig = {
       assignees: data.include.assignees ?? true,
       attachments: data.include.attachments ?? false,
       comments: data.include.comments ?? false,
@@ -165,7 +165,11 @@ export class DuplicateTask {
       tags: data.include.tags ?? true,
       checklists: data.include.checklists ?? true,
       subtasks: data.include.subtasks ?? true
-    });
+    };
+    const include = mapInclude(includeConfig);
+    if (data.dryRun === true) {
+      return ok({ dryRun: true as const, preview: { taskId: data.taskId, include: includeConfig } });
+    }
     try {
       const response = await this.gateway.duplicate_task(data.taskId, include);
       const ref = extractTaskRef(response);

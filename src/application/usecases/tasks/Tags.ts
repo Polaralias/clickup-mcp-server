@@ -171,6 +171,9 @@ export class AddTagsToTask {
     }
     const data = parsed.data;
     const tags = uniqueTags(data.tags);
+    if (data.dryRun === true) {
+      return ok({ dryRun: true as const, preview: { taskId: data.taskId, action: "add" as const, tags } });
+    }
     try {
       const response = await this.gateway.add_task_tags(data.taskId, tags);
       const ref = extractTaskRef(response);
@@ -201,6 +204,9 @@ export class RemoveTagsFromTask {
     }
     const data = parsed.data;
     const tags = uniqueTags(data.tags);
+    if (data.dryRun === true) {
+      return ok({ dryRun: true as const, preview: { taskId: data.taskId, action: "remove" as const, tags } });
+    }
     try {
       const response = await this.gateway.remove_task_tags(data.taskId, tags);
       const ref = extractTaskRef(response);

@@ -223,6 +223,12 @@ export class AttachFileToTask {
       const limitMb = Math.max(1, Math.round(limitBytes / (1024 * 1024)));
       return err("LIMIT_EXCEEDED", `Attachment exceeds ${limitMb} MB`);
     }
+    if (data.dryRun === true) {
+      return ok({
+        dryRun: true as const,
+        preview: { taskId: data.taskId, name: data.name, sizeBytes: parsedDataUri.size }
+      });
+    }
     try {
       const response = await this.gateway.attach_file_to_task(data.taskId, data.dataUri, data.name);
       const ref = extractTaskRef(response);

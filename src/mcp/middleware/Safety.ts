@@ -22,6 +22,14 @@ function extractConfirm(args: unknown): string | undefined {
   return undefined;
 }
 
+function isDryRun(args: unknown): boolean {
+  if (!args || typeof args !== "object") {
+    return false;
+  }
+  const value = (args as Record<string, unknown>).dryRun;
+  return value === true;
+}
+
 function buildHttpMessage(status: number, message: unknown): string {
   if (typeof message === "string" && message.trim().length > 0) {
     return message;
@@ -52,9 +60,12 @@ function normaliseHttpError(error: unknown): ToolError | null {
 
 export function withSafetyConfirmation<TOutput>(handler: ToolExecutor<TOutput>): ToolExecutor<TOutput> {
   return async (input, context) => {
-    const confirm = extractConfirm(input);
-    if (confirm !== "yes") {
-      return err("INVALID_PARAMETER", "confirm must be 'yes'");
+    const dryRun = isDryRun(input);
+    if (!dryRun) {
+      const confirm = extractConfirm(input);
+      if (confirm !== "yes") {
+        return err("INVALID_PARAMETER", "confirm must be 'yes'");
+      }
     }
     try {
       return await handler(input, context);

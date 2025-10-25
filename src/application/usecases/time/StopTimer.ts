@@ -31,6 +31,9 @@ export class StopTimer {
       return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
     }
     const data = parsed.data;
+    if (data.dryRun === true) {
+      return ok({ dryRun: true as const, preview: { action: "stop", taskId: data.taskId } });
+    }
     try {
       const response = await this.gateway.stop_timer(data.taskId);
       const entryId = extractEntryId(response);
