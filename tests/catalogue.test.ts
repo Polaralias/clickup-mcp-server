@@ -13,7 +13,7 @@ import type { ToolDef } from "../src/mcp/tools/catalogue.js";
 type GatewayStub = Pick<ClickUpGateway, "search_docs" | "fetch_tasks_for_index" | "get_task_by_id">;
 
 describe("tool catalogue", () => {
-  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false };
+  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } };
   const server = {} as McpServer;
 
   async function createTools() {

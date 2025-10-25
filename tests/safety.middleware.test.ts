@@ -16,7 +16,7 @@ type GatewayStub = Partial<Record<keyof ClickUpGateway, unknown>> & {
 };
 
 async function resolveTool(name: ToolName, gateway: GatewayStub) {
-  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false };
+  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } };
   const server = {} as McpServer;
   const cache = new ApiCache(makeMemoryKV());
   const tools = await registerTools(server, runtime, {

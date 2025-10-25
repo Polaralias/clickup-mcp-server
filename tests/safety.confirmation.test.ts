@@ -51,7 +51,7 @@ function findTool(tools: Awaited<ReturnType<typeof registerTools>>, name: string
 
 describe("safety confirmation", () => {
   const context: { runtime: RuntimeConfig; server: McpServer } = {
-    runtime: { logLevel: "info", featurePersistence: false },
+    runtime: { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } },
     server: {} as McpServer
   };
 

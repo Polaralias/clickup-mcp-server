@@ -9,7 +9,7 @@ import { makeMemoryKV } from "../src/shared/KV.js";
 
 describe("Tool annotations", () => {
   it("enforce mutation and deletion metadata policies", async () => {
-    const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false };
+    const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } };
     const server = {} as McpServer;
     const cache = new ApiCache(makeMemoryKV());
     const gateway = {} as ClickUpGateway;

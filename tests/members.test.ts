@@ -21,7 +21,7 @@ type GatewayStub = Pick<
 >;
 
 describe("members tools", () => {
-  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false };
+  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } };
   const server = {} as McpServer;
 
   function buildGateway(overrides: Partial<GatewayStub>): GatewayStub {
