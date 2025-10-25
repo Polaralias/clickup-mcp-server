@@ -28,6 +28,26 @@ Run tests:
 npm test
 ```
 
-Stdout is reserved for MCP transport; logs are emitted to stderr.
+Stdout streams structured JSON logs while ClickUp-MCP communicates over standard IO transport.
 
 To verify tools, run ClickUp-MCP with an MCP client and list the available tools.
+
+## Deploying with Smithery
+
+To deploy ClickUp-MCP-Server on Smithery:
+
+1. Ensure you have a valid ClickUp API token and team ID.
+2. Configure required secrets in your Smithery environment:
+   - `CLICKUP_TOKEN`
+   - `CLICKUP_DEFAULT_TEAM_ID`
+3. Optional tuning:
+   - `MAX_ATTACHMENT_MB` (default 8)
+   - `MAX_BULK_CONCURRENCY` (default 10)
+   - `CHARACTER_LIMIT` (default 25000)
+4. Deploy using:
+   ```bash
+   smithery deploy
+   ```
+
+The server will start via `scripts/start.sh` and connect over standard IO as an MCP instance.
+Logs are emitted in JSON lines to stdout.

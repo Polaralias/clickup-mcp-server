@@ -1,0 +1,55 @@
+name: clickup-mcp-server
+version: 1.0.0
+description: >
+  A Model Context Protocol server providing comprehensive ClickUp automation, document,
+  time tracking, and search tooling with integrated safety and dry-run support.
+
+runtime:
+  language: nodejs
+  version: "20"
+
+entrypoint:
+  type: command
+  command: ["bash", "scripts/start.sh"]
+
+environment:
+  required:
+    - CLICKUP_TOKEN
+    - CLICKUP_DEFAULT_TEAM_ID
+  optional:
+    - CLICKUP_PRIMARY_LANGUAGE
+    - MAX_ATTACHMENT_MB
+    - MAX_BULK_CONCURRENCY
+    - CHARACTER_LIMIT
+    - NODE_ENV
+  defaults:
+    NODE_ENV: production
+    MAX_ATTACHMENT_MB: "8"
+    MAX_BULK_CONCURRENCY: "10"
+    CHARACTER_LIMIT: "25000"
+
+health:
+  type: process
+  command: ["node", "--version"]
+
+build:
+  steps:
+    - run: npm ci
+    - run: npm run build
+  output: dist
+
+permissions:
+  network: outbound
+  filesystem: read
+  logs: write
+  telemetry: basic
+
+logging:
+  format: json
+  level: info
+
+lifecycle:
+  on_start:
+    - run: echo "Starting ClickUp-MCP-Server under Smithery"
+  on_stop:
+    - run: echo "Graceful shutdown complete"

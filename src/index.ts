@@ -2,7 +2,17 @@ import { loadRuntimeConfig } from "./config/runtime.js";
 import { makeMemoryKV } from "./shared/KV.js";
 import { ApiCache } from "./infrastructure/cache/ApiCache.js";
 import { startServer } from "./mcp/server.js";
-import { configureLogging, logInfo } from "./shared/logging.js";
+import { configureLogging, logError, logInfo } from "./shared/logging.js";
+
+process.on("SIGTERM", () => {
+  console.log("Received SIGTERM, shutting down gracefully");
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  console.log("Interrupted, shutting down gracefully");
+  process.exit(0);
+});
 
 async function main() {
   const runtime = loadRuntimeConfig();
@@ -14,4 +24,7 @@ async function main() {
   await startServer(runtime);
 }
 
-await main();
+await main().catch(error => {
+  logError("bootstrap", "startup_failed", { error });
+  process.exitCode = 1;
+});
