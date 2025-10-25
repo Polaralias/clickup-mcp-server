@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ListDocPagesInput, ListDocPagesOutput, DocPageItem } from "../../../mcp/tools/schemas/docCrud.js";
 import { Result, ok, err } from "../../../shared/Result.js";
-import { mapHttpError } from "../../../shared/Errors.js";
+import { mapHttpError } from "../../../shared/httpErrors.js";
 import { characterLimit } from "../../../config/runtime.js";
 import type { ClickUpGateway } from "../../../infrastructure/clickup/ClickUpGateway.js";
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DocSearchInput, DocSearchOutput, DocSearchItem } from "../../mcp/tools/schemas/doc.js";
 import { characterLimit } from "../../config/runtime.js";
 import { err, ok, Result } from "../../shared/Result.js";
-import { mapHttpError } from "../../shared/Errors.js";
+import { mapHttpError } from "../../shared/httpErrors.js";
 import type { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import type { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway.js";
 import { BulkProcessor, type WorkItem } from "../services/BulkProcessor.js";
