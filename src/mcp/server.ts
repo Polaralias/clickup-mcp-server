@@ -1,9 +1,12 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { createServer as createHttpServer, type ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import { createLogger, newCorrelationId, withCorrelationId } from "../shared/logging.js";
 import { err, Result } from "../shared/Result.js";
-import type { RuntimeConfig } from "../config/runtime.js";
+import type { HttpTransportConfig, RuntimeConfig } from "../config/runtime.js";
 import { PROJECT_NAME } from "../config/constants.js";
 import { registerTools, RegisteredTool } from "./tools/registerTools.js";
 import { PACKAGE_VERSION } from "../shared/version.js";
@@ -35,6 +38,13 @@ async function executeTool(tool: RegisteredTool, args: unknown, server: Server, 
   }
 }
 
+function applyCorsHeaders(response: ServerResponse, config: HttpTransportConfig): void {
+  response.setHeader("Access-Control-Allow-Origin", config.corsAllowOrigin);
+  response.setHeader("Access-Control-Allow-Headers", config.corsAllowHeaders);
+  response.setHeader("Access-Control-Allow-Methods", config.corsAllowMethods);
+  response.setHeader("Access-Control-Max-Age", "600");
+}
+
 function attachNotify(server: Server): NotifyingServer {
   const target = server as NotifyingServer;
   if (typeof target.notify !== "function") {
@@ -44,6 +54,82 @@ function attachNotify(server: Server): NotifyingServer {
     };
   }
   return target;
+}
+
+async function startHttpServer(
+  server: Server,
+  notifyingServer: NotifyingServer,
+  tools: RegisteredTool[],
+  transportConfig: HttpTransportConfig,
+  logger: ReturnType<typeof createLogger>
+): Promise<void> {
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+    enableJsonResponse: transportConfig.enableJsonResponse,
+    allowedHosts: transportConfig.allowedHosts,
+    allowedOrigins: transportConfig.allowedOrigins,
+    enableDnsRebindingProtection: transportConfig.enableDnsRebindingProtection
+  });
+  transport.onerror = error => {
+    const reason = error instanceof Error ? error.message : String(error);
+    logger.error("http_transport_error", { reason });
+  };
+  await server.connect(transport);
+  const httpServer = createHttpServer(async (request, response) => {
+    applyCorsHeaders(response, transportConfig);
+    if (request.method === "OPTIONS") {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+    try {
+      await transport.handleRequest(request, response);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      logger.error("http_request_failed", { reason });
+      if (!response.headersSent) {
+        response.writeHead(500, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            error: { code: -32000, message: "Internal Server Error" },
+            id: null
+          })
+        );
+      }
+    }
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    httpServer.on("error", reject);
+    httpServer.listen(transportConfig.port, transportConfig.host, () => {
+      resolve();
+    });
+  });
+
+  console.log("ready");
+  const currentTools = buildToolList(tools);
+  await notifyingServer.notify("tools/list_changed", { tools: currentTools });
+  logger.info("server_started", {
+    transport: "http",
+    tools: tools.map(tool => tool.name),
+    host: transportConfig.host,
+    port: transportConfig.port
+  });
+}
+
+async function startStdioServer(
+  server: Server,
+  notifyingServer: NotifyingServer,
+  tools: RegisteredTool[],
+  logger: ReturnType<typeof createLogger>
+): Promise<void> {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.log("ready");
+  const currentTools = buildToolList(tools);
+  await notifyingServer.notify("tools/list_changed", { tools: currentTools });
+  logger.info("server_started", { transport: "stdio", tools: tools.map(tool => tool.name) });
 }
 
 export async function startServer(runtime: RuntimeConfig): Promise<void> {
@@ -97,10 +183,9 @@ export async function startServer(runtime: RuntimeConfig): Promise<void> {
     })
   );
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.log("ready");
-  const currentTools = buildToolList(tools);
-  await notifyingServer.notify("tools/list_changed", { tools: currentTools });
-  logger.info("server_started", { tools: tools.map(tool => tool.name) });
+  if (runtime.transport.kind === "http") {
+    await startHttpServer(server, notifyingServer, tools, runtime.transport, logger);
+  } else {
+    await startStdioServer(server, notifyingServer, tools, logger);
+  }
 }
