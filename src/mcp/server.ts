@@ -99,6 +99,7 @@ export async function startServer(runtime: RuntimeConfig): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  console.log("ready");
   const currentTools = buildToolList(tools);
   await notifyingServer.notify("tools/list_changed", { tools: currentTools });
   logger.info("server_started", { tools: tools.map(tool => tool.name) });

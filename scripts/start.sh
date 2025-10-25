@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 export NODE_ENV=${NODE_ENV:-production}
-node dist/index.js
+exec node dist/index.js
