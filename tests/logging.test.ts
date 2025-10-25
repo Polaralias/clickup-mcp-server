@@ -4,12 +4,12 @@ import { configureLogging, logInfo, withCorrelationId } from "../src/shared/logg
 
 describe("structured logging", () => {
   let writes: string[];
-  let originalWrite: typeof process.stdout.write;
+  let originalWrite: typeof process.stderr.write;
 
   beforeEach(() => {
     writes = [];
-    originalWrite = process.stdout.write;
-    process.stdout.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding | ((err?: Error | null) => void), cb?: (err?: Error | null) => void) => {
+    originalWrite = process.stderr.write;
+    process.stderr.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding | ((err?: Error | null) => void), cb?: (err?: Error | null) => void) => {
       const text =
         typeof chunk === "string"
           ? chunk
@@ -25,12 +25,12 @@ describe("structured logging", () => {
         callback(null);
       }
       return true;
-    }) as unknown as typeof process.stdout.write;
+    }) as unknown as typeof process.stderr.write;
     configureLogging({ level: "info" });
   });
 
   afterEach(() => {
-    process.stdout.write = originalWrite;
+    process.stderr.write = originalWrite;
   });
 
   it("emits json lines with subsystem and timestamp", () => {
