@@ -2,6 +2,7 @@
   "name": "clickup-mcp",
   "version": "0.1.0",
   "type": "module",
+  "module": "./src/index.ts",
   "engines": {
     "node": ">=20"
   },
