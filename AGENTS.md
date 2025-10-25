@@ -144,6 +144,17 @@ Maintainers and LLM-based extensions must uphold the following:
 * **Testing hierarchy** — prioritise Unit → Integration → Behavioural (agent-level) coverage.
 * **Code style** — avoid inline comments; rely on expressive naming and schema typing for clarity.
 
+### Runtime transport configuration
+* STDIO transport remains the default (`MCP_TRANSPORT=stdio`).
+* Hosted HTTP deployments are enabled by setting `MCP_TRANSPORT=http`.
+* HTTP mode honours the following environment variables (optional unless noted):
+  * `MCP_HTTP_PORT` / `PORT` (default `3000`).
+  * `MCP_HTTP_HOST` (default `0.0.0.0`).
+  * `MCP_HTTP_CORS_ALLOW_ORIGIN`, `MCP_HTTP_CORS_ALLOW_HEADERS`, `MCP_HTTP_CORS_ALLOW_METHODS`.
+  * `MCP_HTTP_ENABLE_JSON_RESPONSE`, `MCP_HTTP_ALLOWED_HOSTS`, `MCP_HTTP_ALLOWED_ORIGINS`, `MCP_HTTP_ENABLE_DNS_REBINDING_PROTECTION`.
+* HTTP responses include permissive CORS headers unless overridden via the env vars above.
+* Both transports emit `tools/list_changed` notifications after connection to signal readiness.
+
 ## 11. Workflow Examples and Patterns
 ### Example A: Automated backlog triage
 Intent: ensure urgent issues receive prompt attention without unsafe automation.
