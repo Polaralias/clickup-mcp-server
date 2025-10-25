@@ -4,9 +4,7 @@ description: >
   A Model Context Protocol server providing comprehensive ClickUp automation, document,
   time tracking, and search tooling with integrated safety and dry-run support.
 
-runtime:
-  language: nodejs
-  version: "20"
+runtime: typescript
 
 entrypoint:
   type: command
