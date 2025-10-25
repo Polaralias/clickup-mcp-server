@@ -214,7 +214,11 @@ function mapEntry(payload: unknown): ParsedEntry | null {
   const resolvedMemberId = Math.trunc(memberId);
   const resolvedMemberName =
     typeof member.name === "string" && member.name.length > 0 ? member.name : null;
-  const intervalRecord = record.time_interval ?? record.timeInterval ?? record.interval ?? null;
+  const intervalCandidate = record.time_interval ?? record.timeInterval ?? record.interval ?? null;
+  const intervalRecord =
+    intervalCandidate && typeof intervalCandidate === "object"
+      ? (intervalCandidate as Record<string, unknown>)
+      : null;
   const startMs =
     parseTimestamp(record.start) ??
     parseTimestamp(record.start_time) ??
