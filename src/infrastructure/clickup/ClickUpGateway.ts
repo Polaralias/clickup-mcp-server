@@ -51,17 +51,28 @@ export class ClickUpGateway {
     return `${this.baseUrl}${path}`;
   }
 
-  async search_docs(workspaceId: number, query: string, limit: number, page: number): Promise<unknown> {
-    const cacheKey = this.cache.makeKey({ s: "docs", ws: workspaceId, q: query, limit, page });
+  async search_docs(
+    workspaceId: number,
+    query: string,
+    limit: number,
+    page: number,
+    options?: { content_format?: string }
+  ): Promise<unknown> {
+    const format = options?.content_format ?? null;
+    const cacheKey = this.cache.makeKey({ s: "docs", ws: workspaceId, q: query, limit, page, format });
     const cached = await this.cache.get<unknown>(cacheKey);
     if (cached !== null) {
       return cached;
+    }
+    const params: Record<string, unknown> = { query, limit, page };
+    if (options?.content_format) {
+      params.content_format = options.content_format;
     }
     const response = await this.client.requestChecked({
       method: "GET",
       url: this.buildUrl(`/api/v3/workspaces/${workspaceId}/docs/search`),
       headers: this.authHeader(),
-      params: { query, limit, page },
+      params,
       timeoutMs: this.cfg.timeoutMs
     });
     await this.cache.put(cacheKey, response.data, 30);
