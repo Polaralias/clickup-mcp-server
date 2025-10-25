@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { MoveTaskInput, CreateTaskOutput } from "../../../mcp/tools/schemas/taskCrud.js";
+import { MoveTaskInput, MoveTaskOutput } from "../../../mcp/tools/schemas/taskCrud.js";
 import { Result, ok, err } from "../../../shared/Result.js";
 import { mapHttpError } from "../../../shared/Errors.js";
 import { characterLimit } from "../../../config/runtime.js";
 import type { ClickUpGateway } from "../../../infrastructure/clickup/ClickUpGateway.js";
 
 type InputType = z.infer<typeof MoveTaskInput>;
-type OutputType = z.infer<typeof CreateTaskOutput>;
+type OutputType = z.infer<typeof MoveTaskOutput>;
 
 type HttpErrorLike = { status?: number; data?: unknown };
 
@@ -138,13 +138,16 @@ function enforceLimit(out: OutputType): void {
 export class MoveTask {
   constructor(private readonly gateway: ClickUpGateway) {}
 
-  async execute(ctx: unknown, input: InputType): Promise<Result<z.infer<typeof CreateTaskOutput>>> {
+  async execute(ctx: unknown, input: InputType): Promise<Result<z.infer<typeof MoveTaskOutput>>> {
     void ctx;
     const parsed = MoveTaskInput.safeParse(input ?? {});
     if (!parsed.success) {
       return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
     }
     const data = parsed.data;
+    if (data.dryRun === true) {
+      return ok({ dryRun: true as const, preview: { taskId: data.taskId, targetListId: data.targetListId } });
+    }
     try {
       const response = await this.gateway.move_task(data.taskId, data.targetListId);
       const ref = extractTaskRef(response);

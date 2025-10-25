@@ -192,6 +192,9 @@ export class CommentTask {
       return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
     }
     const data = parsed.data;
+    if (data.dryRun === true) {
+      return ok({ dryRun: true as const, preview: { taskId: data.taskId, markdown: data.commentMarkdown } });
+    }
     try {
       const response = await this.gateway.comment_task(data.taskId, data.commentMarkdown);
       const ref = extractTaskRef(response);

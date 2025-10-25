@@ -138,6 +138,9 @@ export class StartTimer {
     if (typeof data.description === "string" && data.description.length > 0) {
       body.description = data.description;
     }
+    if (data.dryRun === true) {
+      return ok({ dryRun: true as const, preview: { action: "start", taskId: data.taskId, body } });
+    }
     try {
       const response = await this.gateway.start_timer(data.taskId, body);
       const entryId = extractEntryId(response);

@@ -225,7 +225,7 @@ describe("doc search tools", () => {
     const data = result.data as any;
     expect(data.truncated).toBe(true);
     expect(typeof data.guidance).toBe("string");
-    expect(data.guidance).toBe("Output trimmed to character_limit");
+    expect(data.guidance).toBe("contentFormat:text/md; Output trimmed to character_limit");
   });
 
   it("Bulk options map to processor retries", async () => {

@@ -4,7 +4,9 @@ export const CreateDocInput = z
   .object({
     workspaceId: z.number().int().positive(),
     title: z.string().min(1),
-    visibility: z.enum(["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"]).default("PRIVATE")
+    visibility: z.enum(["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"]).default("PRIVATE"),
+    confirm: z.literal("yes").optional(),
+    dryRun: z.boolean().optional()
   })
   .strict();
 
@@ -16,13 +18,29 @@ export const DocRef = z
   })
   .strict();
 
-export const CreateDocOutput = z
+const CreateDocExecutionOutput = z
   .object({
     doc: DocRef,
     truncated: z.boolean().optional(),
     guidance: z.string().optional()
   })
   .strict();
+
+const CreateDocDryRunOutput = z
+  .object({
+    dryRun: z.literal(true),
+    preview: z
+      .object({
+        title: z.string(),
+        visibility: z.enum(["PUBLIC", "PRIVATE", "PERSONAL", "HIDDEN"])
+      })
+      .strict(),
+    truncated: z.boolean().optional(),
+    guidance: z.string().optional()
+  })
+  .strict();
+
+export const CreateDocOutput = z.union([CreateDocExecutionOutput, CreateDocDryRunOutput]);
 
 export const ListDocPagesInput = z
   .object({

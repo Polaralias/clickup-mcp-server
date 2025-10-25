@@ -3,13 +3,17 @@ import { z } from "zod";
 export const StartTimerInput = z
   .object({
     taskId: z.string().min(1),
-    description: z.string().optional()
+    description: z.string().optional(),
+    confirm: z.literal("yes").optional(),
+    dryRun: z.boolean().optional()
   })
   .strict();
 
 export const StopTimerInput = z
   .object({
-    taskId: z.string().min(1)
+    taskId: z.string().min(1),
+    confirm: z.literal("yes").optional(),
+    dryRun: z.boolean().optional()
   })
   .strict();
 
@@ -50,7 +54,8 @@ export const CreateEntryInput = z
     start: z.string().datetime(),
     end: z.string().datetime(),
     description: z.string().optional(),
-    billable: z.boolean().default(false)
+    billable: z.boolean().default(false),
+    dryRun: z.boolean().optional()
   })
   .strict();
 

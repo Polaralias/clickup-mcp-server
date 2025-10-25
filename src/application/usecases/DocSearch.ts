@@ -191,7 +191,17 @@ export class DocSearch {
     }
     const data = parsed.data;
     try {
-      const response = await this.gateway.search_docs(data.workspaceId, data.query, data.limit, data.page);
+      const format = data.contentFormat ?? "text/md";
+      const searchDocs = this.gateway.search_docs as unknown as (
+        workspaceId: number,
+        query: string,
+        limit: number,
+        page: number,
+        options?: { content_format?: string }
+      ) => Promise<unknown>;
+      const response = await searchDocs(data.workspaceId, data.query, data.limit, data.page, {
+        content_format: format
+      });
       const payload = response as { total?: unknown; items?: unknown } | null | undefined;
       const rawItems: unknown[] = Array.isArray(payload?.items) ? (payload?.items as unknown[]) : [];
       const results: ExtendedDocItem[] = rawItems.map(item => {
@@ -218,7 +228,7 @@ export class DocSearch {
         return element;
       });
       if (data.expandPages) {
-        const format = data.pageBody?.contentFormat ?? "text/md";
+        const pageFormat = data.pageBody?.contentFormat ?? "text/md";
         const limitCount = clamp(data.pageBody?.limit ?? 3, 1, 10);
         const slice = results.slice(0, limitCount);
         const targets = slice.filter(item => item.docId.length > 0 && item.pageId.length > 0);
@@ -231,7 +241,7 @@ export class DocSearch {
                 data.workspaceId,
                 item.docId,
                 item.pageId,
-                format
+                pageFormat
               );
               const content = extractContent(response);
               if (content === null) {
@@ -266,6 +276,12 @@ export class DocSearch {
         results
       };
       enforceLimit(out);
+      const formatGuidance = `contentFormat:${format}`;
+      if (out.guidance) {
+        out.guidance = `${formatGuidance}; ${out.guidance}`;
+      } else {
+        out.guidance = formatGuidance;
+      }
       return ok(out, out.truncated === true, out.guidance);
     } catch (error) {
       const httpError = error as HttpErrorLike;
