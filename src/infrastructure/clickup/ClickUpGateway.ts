@@ -310,6 +310,53 @@ export class ClickUpGateway {
     return response.data;
   }
 
+  async update_task(
+    taskId: string,
+    body: {
+      name?: string;
+      status?: string;
+      assignees?: number[];
+      priority?: string | number;
+      due_date?: string;
+      time_estimate?: string;
+      tags?: string[];
+      description?: string;
+    }
+  ): Promise<unknown> {
+    const response = await this.client.requestChecked({
+      method: "PUT",
+      url: this.buildUrl(`/api/v2/task/${taskId}`),
+      headers: this.authHeader(),
+      json: body,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async set_task_custom_field(
+    taskId: string,
+    fieldId: string,
+    value: unknown,
+    valueOptions?: Record<string, unknown>
+  ): Promise<unknown> {
+    const payload: Record<string, unknown> = { value };
+    if (valueOptions && Object.keys(valueOptions).length > 0) {
+      payload.value_options = valueOptions;
+    }
+    const response = await this.client.requestChecked({
+      method: "POST",
+      url: this.buildUrl(`/api/v2/task/${taskId}/field/${fieldId}`),
+      headers: this.authHeader(),
+      json: payload,
+      timeoutMs: this.cfg.timeoutMs
+    });
+    return response.data;
+  }
+
+  async add_task_comment(taskId: string, markdown: string): Promise<unknown> {
+    return this.comment_task(taskId, markdown);
+  }
+
   async move_task(taskId: string, targetListId: string): Promise<unknown> {
     const response = await this.client.requestChecked({
       method: "POST",

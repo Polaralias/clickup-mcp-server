@@ -53,7 +53,7 @@ describe("Time reports", () => {
     });
     const gateway: TagGatewayStub = { search_tasks, list_time_entries };
     const usecase = new ReportTimeForTag(gateway as unknown as ClickUpGateway);
-    const result = await usecase.execute({}, { teamId: 1, tag: "alpha" });
+    const result = await usecase.execute({}, { teamId: 1, tag: "alpha", includeBillable: true });
     expect(search_tasks).toHaveBeenCalledWith({
       teamId: 1,
       page: 0,
@@ -107,7 +107,11 @@ describe("Time reports", () => {
     const list_view_tasks = vi.fn();
     const gateway: ContainerGatewayStub = { search_tasks, list_time_entries, list_view_tasks };
     const usecase = new ReportTimeForContainer(gateway as unknown as ClickUpGateway);
-    const result = await usecase.execute({}, { teamId: 9, ref: { containerType: "list", containerId: "L1" } });
+    const result = await usecase.execute({}, {
+      teamId: 9,
+      includeBillable: true,
+      ref: { containerType: "list", containerId: "L1" }
+    });
     expect(search_tasks).toHaveBeenCalledWith({
       teamId: 9,
       page: 0,
@@ -136,7 +140,7 @@ describe("Time reports", () => {
     const list_time_entries = vi.fn().mockResolvedValue({ time_entries: [], total: 0, page: 0, limit: 100 });
     const gateway: TagGatewayStub = { search_tasks, list_time_entries };
     const usecase = new ReportTimeForTag(gateway as unknown as ClickUpGateway);
-    const result = await usecase.execute({}, { teamId: 1, tag: "alpha" });
+    const result = await usecase.execute({}, { teamId: 1, tag: "alpha", includeBillable: true });
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");
@@ -173,7 +177,11 @@ describe("Time reports", () => {
     const search_tasks = vi.fn();
     const gateway: ContainerGatewayStub = { search_tasks, list_time_entries, list_view_tasks };
     const usecase = new ReportTimeForContainer(gateway as unknown as ClickUpGateway);
-    const result = await usecase.execute({}, { teamId: 42, ref: { containerType: "view", containerId: "V1" } });
+    const result = await usecase.execute({}, {
+      teamId: 42,
+      includeBillable: true,
+      ref: { containerType: "view", containerId: "V1" }
+    });
     expect(list_view_tasks).toHaveBeenCalledWith("team", 42, "V1", { page: 0, limit: 100 });
     expect(search_tasks).not.toHaveBeenCalled();
     expect(result.isError).toBe(false);
@@ -227,6 +235,7 @@ describe("Time reports", () => {
     const result = await usecase.execute({}, {
       teamId: 3,
       tag: "window",
+      includeBillable: true,
       since: "2025-01-05T09:00:00.000Z",
       until: "2025-01-05T12:00:00.000Z"
     });
@@ -287,7 +296,7 @@ describe("Time reports", () => {
     });
     const gateway: SpaceTagGatewayStub = { search_tasks_by_space_and_tag, list_time_entries };
     const usecase = new ReportTimeForSpaceTag(gateway as unknown as ClickUpGateway);
-    const result = await usecase.execute({}, { teamId: 7, spaceId: "S1", tag: "alpha" });
+    const result = await usecase.execute({}, { teamId: 7, spaceId: "S1", tag: "alpha", includeBillable: true });
     expect(search_tasks_by_space_and_tag).toHaveBeenCalledWith(7, "S1", "alpha", 0, 100);
     expect(list_time_entries).toHaveBeenCalledTimes(1);
     expect(result.isError).toBe(false);
@@ -317,7 +326,7 @@ describe("Time reports", () => {
     const list_time_entries = vi.fn().mockResolvedValue({ time_entries: [], total: 0, page: 0, limit: 100 });
     const gateway: SpaceTagGatewayStub = { search_tasks_by_space_and_tag, list_time_entries };
     const usecase = new ReportTimeForSpaceTag(gateway as unknown as ClickUpGateway);
-    const result = await usecase.execute({}, { teamId: 8, spaceId: "S2", tag: "alpha" });
+    const result = await usecase.execute({}, { teamId: 8, spaceId: "S2", tag: "alpha", includeBillable: true });
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");

@@ -44,6 +44,13 @@ type ParsedEntries = {
   hasMore: boolean | null;
 };
 
+type IntervalRecord = Record<string, unknown> & {
+  start?: unknown;
+  from?: unknown;
+  end?: unknown;
+  to?: unknown;
+};
+
 function toInt(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return Math.trunc(value);
@@ -297,7 +304,7 @@ function mapEntry(payload: unknown): ParsedEntry | null {
   const memberRecord = record.user as Record<string, unknown> | null | undefined;
   const memberIdValue = memberRecord?.id ?? memberRecord?.user_id ?? memberRecord?.userId ?? record.user_id ?? record.userId ?? record.member_id ?? record.memberId;
   const memberId = toInt(memberIdValue);
-  const intervalRecord = record.time_interval ?? record.timeInterval ?? record.interval ?? null;
+  const intervalRecord = (record.time_interval ?? record.timeInterval ?? record.interval ?? null) as IntervalRecord | null;
   const startMs =
     parseTimestamp(record.start) ??
     parseTimestamp(record.start_time) ??

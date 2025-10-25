@@ -12,10 +12,13 @@ describe("doc search content format", () => {
       search_docs: searchDocs
     };
     const cache = new ApiCache(makeMemoryKV());
-    const usecase = new DocSearch(gateway as ClickUpGateway, cache);
+    const usecase = new DocSearch(gateway as unknown as ClickUpGateway, cache);
     const result = await usecase.execute({}, {
       workspaceId: 1,
       query: "alpha",
+      limit: 20,
+      page: 0,
+      expandPages: false,
       contentFormat: "text/html"
     });
     expect(searchDocs).toHaveBeenCalledTimes(1);

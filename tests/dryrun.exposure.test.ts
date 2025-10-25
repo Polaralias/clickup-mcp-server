@@ -22,6 +22,9 @@ describe("dry run exposure", () => {
     if (result.isError) {
       throw new Error("Expected dry run success");
     }
+    if (!("dryRun" in result.data)) {
+      throw new Error("Expected dry run preview");
+    }
     expect(result.data).toEqual({
       dryRun: true,
       preview: {
@@ -54,6 +57,9 @@ describe("dry run exposure", () => {
     if (result.isError) {
       throw new Error("Expected dry run success");
     }
+    if (!("dryRun" in result.data)) {
+      throw new Error("Expected dry run preview");
+    }
     expect(result.data.dryRun).toBe(true);
     expect(result.data.preview).toEqual(
       expect.objectContaining({ taskId: "TASK-1", appendMarkdownDescription: "More", addCommentMarkdown: "Note" })
@@ -79,6 +85,9 @@ describe("dry run exposure", () => {
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected dry run success");
+    }
+    if (!("dryRun" in result.data)) {
+      throw new Error("Expected dry run preview");
     }
     expect(result.data).toEqual({
       dryRun: true,
@@ -106,6 +115,9 @@ describe("dry run exposure", () => {
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected dry run success");
+    }
+    if (!("dryRun" in result.data)) {
+      throw new Error("Expected dry run preview");
     }
     expect(result.data).toEqual({
       dryRun: true,

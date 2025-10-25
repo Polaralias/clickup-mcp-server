@@ -47,7 +47,7 @@ describe("doc search tools", () => {
       }
     };
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
     const tool = tools.find(entry => entry.name === "clickup_doc_search");
     if (!tool) {
       throw new Error("Tool not found");
@@ -99,7 +99,7 @@ describe("doc search tools", () => {
       get_doc_page
     };
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
     const tool = tools.find(entry => entry.name === "clickup_doc_search");
     if (!tool) {
       throw new Error("Tool not found");
@@ -122,7 +122,7 @@ describe("doc search tools", () => {
     expect(get_doc_page).toHaveBeenCalledTimes(2);
     expect(get_doc_page).toHaveBeenNthCalledWith(1, 1, "D1", "P1", "text/html");
     expect(get_doc_page).toHaveBeenNthCalledWith(2, 1, "D2", "P2", "text/html");
-    const items = result.data.results as any[];
+    const items = (result.data as { results: Array<{ content?: string }> }).results;
     expect(items[0].content).toBe("<p>One</p>");
     expect(items[1].content).toBe("<p>Two</p>");
     expect(items[2].content).toBeUndefined();
@@ -161,7 +161,7 @@ describe("doc search tools", () => {
       }
     };
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
     const tool = tools.find(entry => entry.name === "clickup_bulk_doc_search");
     if (!tool) {
       throw new Error("Tool not found");
@@ -212,7 +212,7 @@ describe("doc search tools", () => {
       }
     };
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
     const tool = tools.find(entry => entry.name === "clickup_doc_search");
     if (!tool) {
       throw new Error("Tool not found");
@@ -268,7 +268,7 @@ describe("doc search tools", () => {
       }
     };
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
     const tool = tools.find(entry => entry.name === "clickup_bulk_doc_search");
     if (!tool) {
       throw new Error("Tool not found");

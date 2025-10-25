@@ -1,4 +1,5 @@
 import Fuse from "fuse.js";
+import type { IFuseOptions } from "fuse.js";
 
 export type TaskIndexRecord = {
   taskId: string;
@@ -32,7 +33,7 @@ export class TaskSearchIndex {
     return JSON.stringify(scope ?? {});
   }
 
-  private fuseOptions(): Fuse.IFuseOptions<TaskIndexRecord> {
+  private fuseOptions(): IFuseOptions<TaskIndexRecord> {
     return {
       includeScore: true,
       ignoreLocation: true,

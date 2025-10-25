@@ -147,7 +147,14 @@ export function buildCatalogue(
     }
     return item;
   });
-  const payload = {
+  const payload: {
+    service: string;
+    version: string;
+    character_limit: number;
+    tools: CatalogueItem[];
+    truncated?: boolean;
+    guidance?: string;
+  } = {
     service,
     version,
     character_limit: charLimit,

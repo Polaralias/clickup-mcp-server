@@ -9,6 +9,9 @@ import type { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway
 type UpdateTaskInputType = z.infer<typeof UpdateTaskInput>;
 type UpdateTaskOutputType = z.infer<typeof UpdateTaskOutput>;
 type UpdateTaskSuccessOutputType = UpdateTaskSuccessOutput;
+type UpdateTaskDryRunOutputType = Extract<UpdateTaskOutputType, { dryRun: true }>;
+type UpdateTaskDryRunPreview = UpdateTaskDryRunOutputType["preview"];
+type UpdateTaskBody = Parameters<ClickUpGateway["update_task"]>[1];
 
 type HttpErrorLike = { status?: number; data?: unknown };
 
@@ -114,7 +117,7 @@ export class UpdateTask {
       return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
     }
     const data = parsed.data;
-    const coreUpdate: Record<string, unknown> = {};
+    const coreUpdate: UpdateTaskBody = {};
     if (typeof data.name === "string") {
       coreUpdate.name = data.name;
     }
@@ -137,9 +140,9 @@ export class UpdateTask {
       coreUpdate.tags = data.tags;
     }
     if (data.dryRun === true) {
-      const preview: Record<string, unknown> = { taskId: data.taskId };
+      const preview: UpdateTaskDryRunPreview = { taskId: data.taskId };
       if (Object.keys(coreUpdate).length > 0) {
-        preview.coreUpdate = coreUpdate;
+        preview.coreUpdate = { ...coreUpdate };
       }
       if (Array.isArray(data.customFields) && data.customFields.length > 0) {
         preview.customFieldUpdates = data.customFields;

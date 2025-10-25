@@ -20,15 +20,19 @@ describe("Doc lifecycle integration", () => {
         )
     } satisfies Partial<ClickUpGateway>;
     try {
-      const createUsecase = new CreateDoc(gateway as ClickUpGateway);
-      const updateUsecase = new UpdateDocPage(gateway as ClickUpGateway);
-      const getUsecase = new GetDocPage(gateway as ClickUpGateway);
+      const typedGateway = gateway as unknown as ClickUpGateway;
+      const createUsecase = new CreateDoc(typedGateway);
+      const updateUsecase = new UpdateDocPage(typedGateway);
+      const getUsecase = new GetDocPage(typedGateway);
       const createResult = await createUsecase.execute({}, { workspaceId: 42, title: "T".repeat(200), visibility: "PUBLIC" });
       expect(createResult.isError).toBe(false);
       if (createResult.isError) {
         throw new Error("Expected success");
       }
       expect(createResult.truncated).toBe(true);
+      if ("dryRun" in createResult.data) {
+        throw new Error("Expected execution result");
+      }
       expect(createResult.data.truncated).toBe(true);
       expect(createResult.data.guidance).toBe("Output trimmed to character_limit");
       expect(createResult.data.doc.docId).toBe("DOC-1");
@@ -48,6 +52,9 @@ describe("Doc lifecycle integration", () => {
       expect(dryRun.isError).toBe(false);
       if (dryRun.isError) {
         throw new Error("Expected success");
+      }
+      if (!("dryRun" in dryRun.data)) {
+        throw new Error("Expected dry run output");
       }
       expect(dryRun.data.preview).toEqual({
         workspaceId: 42,
@@ -69,6 +76,9 @@ describe("Doc lifecycle integration", () => {
       expect(updateResult.isError).toBe(false);
       if (updateResult.isError) {
         throw new Error("Expected success");
+      }
+      if ("dryRun" in updateResult.data) {
+        throw new Error("Expected execution result");
       }
       expect(updateResult.truncated).toBe(true);
       expect(updateResult.data.truncated).toBe(true);

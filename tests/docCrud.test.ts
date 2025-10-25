@@ -21,11 +21,14 @@ describe("Doc CRUD tools", () => {
       update_doc_page: vi.fn()
     };
     const usecase = new CreateDoc(gateway as unknown as ClickUpGateway);
-    const result = await usecase.execute({}, { workspaceId: 2, title: "Draft" });
+    const result = await usecase.execute({}, { workspaceId: 2, title: "Draft", visibility: "PRIVATE" });
     expect(create_doc).toHaveBeenCalledWith(2, { title: "Draft", visibility: "PRIVATE" });
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");
+    }
+    if (!("doc" in result.data)) {
+      throw new Error("Expected execution result with doc");
     }
     expect(result.data.doc.docId).toBe("D1");
     expect(result.data.doc.title).toBe("New");
@@ -109,6 +112,9 @@ describe("Doc CRUD tools", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
+    }
     expect(result.data.updated).toBe(true);
   });
 
@@ -127,7 +133,7 @@ describe("Doc CRUD tools", () => {
       update_doc_page: vi.fn()
     };
     const usecase = new GetDocPage(gateway as unknown as ClickUpGateway);
-    const result = await usecase.execute({}, { workspaceId: 6, docId: "D9", pageId: "PX" });
+    const result = await usecase.execute({}, { workspaceId: 6, docId: "D9", pageId: "PX", contentFormat: "text/md" });
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");

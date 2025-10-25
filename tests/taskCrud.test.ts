@@ -108,6 +108,9 @@ describe("Task CRUD usecases", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
+    }
     expect(result.data.task.taskId).toBe("T123");
     expect(result.data.task.url).toBe("https://app.clickup.com/t/T123");
   });
@@ -121,6 +124,9 @@ describe("Task CRUD usecases", () => {
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");
+    }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
     }
     expect(result.data.task.taskId).toBe("T200");
     expect(result.data.task.url).toBe("https://app.clickup.com/t/T200");
@@ -157,6 +163,9 @@ describe("Task CRUD usecases", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
+    }
     expect(result.data.task.taskId).toBe("T301");
   });
 
@@ -169,6 +178,9 @@ describe("Task CRUD usecases", () => {
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");
+    }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
     }
     expect(result.data.task.taskId).toBe("T400");
 
@@ -225,7 +237,7 @@ describe("Task CRUD usecases", () => {
     expect(first.data.results.map(item => item.taskId)).toEqual(["A", "B"]);
     expect(first.data.results[0].dateUpdated).toBe(new Date(1730).toISOString());
 
-    const second = await usecase.execute({}, { page: 1, limit: 2 });
+    const second = await usecase.execute({}, { page: 1, limit: 2, query: "", includeClosed: false });
     expect(search_tasks).toHaveBeenCalledTimes(2);
     expect(second.isError).toBe(false);
     if (second.isError) {
@@ -244,6 +256,9 @@ describe("Task CRUD usecases", () => {
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");
+    }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
     }
     expect(result.data.task.taskId).toBe("T500");
     expect(result.data.commentId).toBe("C1");
@@ -273,6 +288,9 @@ describe("Task CRUD usecases", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
+    }
     expect(result.data.attachmentId).toBe("ATT1");
     expect(result.data.sizeBytes).toBe(buffer.length);
   });
@@ -288,6 +306,9 @@ describe("Task CRUD usecases", () => {
     if (addResult.isError) {
       throw new Error("Expected success result");
     }
+    if ("dryRun" in addResult.data) {
+      throw new Error("Expected execution result");
+    }
     expect(addResult.data.added).toEqual(["urgent", "review"]);
     expect(addResult.data.removed).toEqual([]);
 
@@ -296,6 +317,9 @@ describe("Task CRUD usecases", () => {
     expect(removeResult.isError).toBe(false);
     if (removeResult.isError) {
       throw new Error("Expected success result");
+    }
+    if ("dryRun" in removeResult.data) {
+      throw new Error("Expected execution result");
     }
     expect(removeResult.data.added).toEqual([]);
     expect(removeResult.data.removed).toEqual(["urgent", "review"]);
