@@ -5,12 +5,12 @@ import { startServer } from "./mcp/server.js";
 import { configureLogging, logError, logInfo } from "./shared/logging.js";
 
 process.on("SIGTERM", () => {
-  console.log("Received SIGTERM, shutting down gracefully");
+  logInfo("bootstrap", "signal_shutdown", { signal: "SIGTERM" });
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
-  console.log("Interrupted, shutting down gracefully");
+  logInfo("bootstrap", "signal_shutdown", { signal: "SIGINT" });
   process.exit(0);
 });
 
