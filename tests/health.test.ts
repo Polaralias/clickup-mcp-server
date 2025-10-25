@@ -6,7 +6,12 @@ import { healthTool } from "../src/mcp/tools/registerTools.js";
 
 describe("health tool", () => {
   it("returns server status", async () => {
-    const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: true, transport: { kind: "stdio" } };
+    const runtime: RuntimeConfig = {
+      logLevel: "info",
+      featurePersistence: true,
+      transport: { kind: "stdio" },
+      httpInitializeTimeoutMs: 45_000
+    };
     const result = await healthTool.execute({}, { server: {} as McpServer, runtime });
     expect(result.isError).toBe(false);
     if (result.isError) {

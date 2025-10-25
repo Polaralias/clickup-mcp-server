@@ -13,12 +13,14 @@ export type HttpTransportConfig = {
   allowedHosts?: string[];
   allowedOrigins?: string[];
   enableDnsRebindingProtection: boolean;
+  initializeTimeoutMs: number;
 };
 
 export type RuntimeConfig = {
   logLevel: "debug" | "info" | "warn" | "error";
   featurePersistence: boolean;
   transport: StdioTransportConfig | HttpTransportConfig;
+  httpInitializeTimeoutMs: number;
 };
 
 const allowedLevels = new Set<RuntimeConfig["logLevel"]>(["debug", "info", "warn", "error"]);
@@ -26,6 +28,7 @@ const DEFAULT_ATTACHMENT_MB = 8;
 const DEFAULT_BULK_CONCURRENCY = 10;
 const DEFAULT_HTTP_PORT = 3000;
 const DEFAULT_HTTP_HOST = "0.0.0.0";
+const DEFAULT_HTTP_INITIALIZE_TIMEOUT_MS = 45_000;
 
 function resolveLogLevel(value: string | undefined): RuntimeConfig["logLevel"] {
   if (value && allowedLevels.has(value as RuntimeConfig["logLevel"])) {
@@ -73,7 +76,11 @@ function parseList(value: string | undefined): string[] | undefined {
   return items.length > 0 ? items : undefined;
 }
 
-function resolveHttpTransport(): HttpTransportConfig {
+function resolveHttpInitializeTimeoutMs(): number {
+  return parsePositiveInt(process.env.MCP_HTTP_INITIALIZE_TIMEOUT_MS) ?? DEFAULT_HTTP_INITIALIZE_TIMEOUT_MS;
+}
+
+function resolveHttpTransport(initializeTimeoutMs: number): HttpTransportConfig {
   const host = process.env.MCP_HTTP_HOST?.trim() || DEFAULT_HTTP_HOST;
   const port = parsePositiveInt(process.env.MCP_HTTP_PORT ?? process.env.PORT) ?? DEFAULT_HTTP_PORT;
   const corsAllowOrigin = process.env.MCP_HTTP_CORS_ALLOW_ORIGIN?.trim() || "*";
@@ -95,14 +102,15 @@ function resolveHttpTransport(): HttpTransportConfig {
     enableJsonResponse,
     allowedHosts,
     allowedOrigins,
-    enableDnsRebindingProtection
+    enableDnsRebindingProtection,
+    initializeTimeoutMs
   };
 }
 
-function resolveTransport(): RuntimeConfig["transport"] {
+function resolveTransport(initializeTimeoutMs: number): RuntimeConfig["transport"] {
   const value = process.env.MCP_TRANSPORT?.trim().toLowerCase();
   if (value === "http") {
-    return resolveHttpTransport();
+    return resolveHttpTransport(initializeTimeoutMs);
   }
   return { kind: "stdio" };
 }
@@ -110,8 +118,9 @@ function resolveTransport(): RuntimeConfig["transport"] {
 export function loadRuntimeConfig(): RuntimeConfig {
   const logLevel = resolveLogLevel(process.env.LOG_LEVEL);
   const featurePersistence = process.env.FEATURE_PERSISTENCE === "true";
-  const transport = resolveTransport();
-  return { logLevel, featurePersistence, transport };
+  const httpInitializeTimeoutMs = resolveHttpInitializeTimeoutMs();
+  const transport = resolveTransport(httpInitializeTimeoutMs);
+  return { logLevel, featurePersistence, transport, httpInitializeTimeoutMs };
 }
 
 export function characterLimit(): number {

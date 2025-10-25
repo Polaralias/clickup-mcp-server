@@ -14,7 +14,12 @@ type ToolListEntry = {
 type ServerContext = {
   notifier: { notify: (method: string, params: unknown) => Promise<void> };
   toolList: ToolListEntry[];
-  logger: { info: (message: string, extras?: Record<string, unknown>) => void; error: (message: string, extras?: Record<string, unknown>) => void };
+  logger: {
+    info: (message: string, extras?: Record<string, unknown>) => void;
+    warn: (message: string, extras?: Record<string, unknown>) => void;
+    error: (message: string, extras?: Record<string, unknown>) => void;
+  };
+  runtime?: { httpInitializeTimeoutMs: number };
 };
 
 type JsonRpcRequest = {
@@ -98,6 +103,7 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
   await clientTransport.start();
   let nextId = 1;
   const pending = new Map<number, PendingRequest>();
+  const initializeTimeoutMs = context.runtime?.httpInitializeTimeoutMs ?? 45_000;
 
   clientTransport.onmessage = message => {
     const payload = message as Record<string, unknown>;
@@ -211,7 +217,7 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
       response.end(JSON.stringify(methodNotFound(payload.id ?? null)));
       return;
     }
-    const timeout = payload.method === "initialize" ? 8000 : undefined;
+    const timeout = payload.method === "initialize" ? initializeTimeoutMs : undefined;
     try {
       const result = await sendRequest(payload.method, payload.params, timeout);
       const id = payload.id ?? null;
@@ -224,16 +230,20 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
     } catch (error) {
       const id = payload.id ?? null;
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id,
-          error: { code: -32000, message: "Server error", data: { reason: error instanceof Error ? error.message : String(error) } }
-        })
-      );
-      context.logger.error("http_request_failed", {
+      const reason = error instanceof Error ? error.message : String(error);
+      const isTimeout = reason === "Request timed out";
+      const errorPayload = isTimeout
+        ? { jsonrpc: "2.0" as const, id, error: { code: -32001, message: "Request timed out" as const } }
+        : {
+            jsonrpc: "2.0" as const,
+            id,
+            error: { code: -32000, message: "Server error", data: { reason } }
+          };
+      response.end(JSON.stringify(errorPayload));
+      const logMethod = isTimeout ? context.logger.warn.bind(context.logger) : context.logger.error.bind(context.logger);
+      logMethod("http_request_failed", {
         method: payload.method,
-        reason: error instanceof Error ? error.message : String(error)
+        reason
       });
     }
   });

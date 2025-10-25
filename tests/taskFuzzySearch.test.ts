@@ -11,7 +11,12 @@ import { registerTools } from "../src/mcp/tools/registerTools.js";
 type GatewayStub = Pick<ClickUpGateway, "search_docs" | "fetch_tasks_for_index" | "get_task_by_id">;
 
 describe("task fuzzy search tools", () => {
-  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } };
+  const runtime: RuntimeConfig = {
+    logLevel: "info",
+    featurePersistence: false,
+    transport: { kind: "stdio" },
+    httpInitializeTimeoutMs: 45_000
+  };
   const server = {} as McpServer;
  
    afterEach(() => {
