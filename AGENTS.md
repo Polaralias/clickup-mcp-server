@@ -152,6 +152,7 @@ Maintainers and LLM-based extensions must uphold the following:
   * `MCP_HTTP_HOST` (default `0.0.0.0`).
   * `MCP_HTTP_CORS_ALLOW_ORIGIN`, `MCP_HTTP_CORS_ALLOW_HEADERS`, `MCP_HTTP_CORS_ALLOW_METHODS`.
   * `MCP_HTTP_ENABLE_JSON_RESPONSE`, `MCP_HTTP_ALLOWED_HOSTS`, `MCP_HTTP_ALLOWED_ORIGINS`, `MCP_HTTP_ENABLE_DNS_REBINDING_PROTECTION`.
+  * `MCP_HTTP_INITIALIZE_TIMEOUT_MS` (default `45000`) to control the HTTP bridge timeout for `initialize` requests.
 * HTTP responses include permissive CORS headers unless overridden via the env vars above.
 * Both transports emit `tools/list_changed` notifications after connection to signal readiness.
 

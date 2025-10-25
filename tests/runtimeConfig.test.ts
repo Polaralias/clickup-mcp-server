@@ -16,6 +16,7 @@ describe("runtime configuration", () => {
     delete process.env.MCP_TRANSPORT;
     const config = loadRuntimeConfig();
     expect(config.transport).toEqual({ kind: "stdio" });
+    expect(config.httpInitializeTimeoutMs).toBe(45_000);
   });
 
   it("configures http transport when requested", () => {
@@ -29,6 +30,7 @@ describe("runtime configuration", () => {
     process.env.MCP_HTTP_ALLOWED_HOSTS = "example.com,api.example.com";
     process.env.MCP_HTTP_ALLOWED_ORIGINS = "https://example.com";
     process.env.MCP_HTTP_ENABLE_DNS_REBINDING_PROTECTION = "true";
+    process.env.MCP_HTTP_INITIALIZE_TIMEOUT_MS = "120000";
 
     const config = loadRuntimeConfig();
     expect(config.transport.kind).toBe("http");
@@ -44,5 +46,13 @@ describe("runtime configuration", () => {
     expect(config.transport.allowedHosts).toEqual(["example.com", "api.example.com"]);
     expect(config.transport.allowedOrigins).toEqual(["https://example.com"]);
     expect(config.transport.enableDnsRebindingProtection).toBe(true);
+    expect(config.transport.initializeTimeoutMs).toBe(120_000);
+    expect(config.httpInitializeTimeoutMs).toBe(120_000);
+  });
+
+  it("falls back to default http timeout when override invalid", () => {
+    process.env.MCP_HTTP_INITIALIZE_TIMEOUT_MS = "-5";
+    const config = loadRuntimeConfig();
+    expect(config.httpInitializeTimeoutMs).toBe(45_000);
   });
 });

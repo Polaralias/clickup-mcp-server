@@ -21,7 +21,12 @@ type GatewayStub = Pick<
 >;
 
 describe("resolve tools", () => {
-  const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } };
+  const runtime: RuntimeConfig = {
+    logLevel: "info",
+    featurePersistence: false,
+    transport: { kind: "stdio" },
+    httpInitializeTimeoutMs: 45_000
+  };
   const server = {} as McpServer;
 
   function baseGateway(overrides: Partial<GatewayStub>): GatewayStub {

@@ -184,7 +184,12 @@ describe("Task CRUD usecases", () => {
     }
     expect(result.data.task.taskId).toBe("T400");
 
-    const runtime: RuntimeConfig = { logLevel: "info", featurePersistence: false, transport: { kind: "stdio" } };
+    const runtime: RuntimeConfig = {
+      logLevel: "info",
+      featurePersistence: false,
+      transport: { kind: "stdio" },
+      httpInitializeTimeoutMs: 45_000
+    };
     const server = {} as McpServer;
     const cache = new ApiCache(makeMemoryKV());
     const registerGateway = buildGatewayStub();
