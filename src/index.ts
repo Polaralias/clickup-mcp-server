@@ -172,13 +172,21 @@ async function main(): Promise<void> {
   }
   logInfo("bootstrap", "startup_begin");
   const server = await createServer(appConfig);
-  const useHttp = process.env.SMITHERY_HTTP === "1" || Boolean(process.env.PORT);
-  if (useHttp) {
+  const runtime = getContext(server).runtime;
+  const transport = runtime.transport;
+  if (transport.kind === "http") {
+    await startHttpBridge(server, { port: transport.port, host: transport.host });
+    return;
+  }
+
+  const smitheryHint = process.env.SMITHERY_HTTP === "1" || Boolean(process.env.PORT);
+  if (smitheryHint) {
     const port = parsePort(process.env.PORT) ?? 8080;
     await startHttpBridge(server, { port });
-  } else {
-    await startStdio(server);
+    return;
   }
+
+  await startStdio(server);
 }
 
 main().catch(error => {

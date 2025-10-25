@@ -91,7 +91,10 @@ function parseUrl(raw: string | undefined): URL {
   return new URL(raw ?? "", "http://localhost");
 }
 
-export async function startHttpBridge(server: Server, opts: { port: number }): Promise<void> {
+export async function startHttpBridge(
+  server: Server,
+  opts: { port: number; host?: string }
+): Promise<void> {
   const context = getContext(server);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -240,13 +243,22 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
 
   await new Promise<void>((resolve, reject) => {
     httpServer.once("error", reject);
-    httpServer.listen(opts.port, () => {
+    const onListen = () => {
       httpServer.off("error", reject);
       resolve();
-    });
+    };
+    if (opts.host) {
+      httpServer.listen(opts.port, opts.host, onListen);
+    } else {
+      httpServer.listen(opts.port, onListen);
+    }
   });
 
   console.log("ready");
   await context.notifier.notify("tools/list_changed", { tools: context.toolList });
-  context.logger.info("server_started", { transport: "http", port: opts.port });
+  context.logger.info("server_started", {
+    transport: "http",
+    port: opts.port,
+    host: opts.host ?? "0.0.0.0"
+  });
 }
