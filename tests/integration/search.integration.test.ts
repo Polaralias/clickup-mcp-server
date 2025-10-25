@@ -6,7 +6,7 @@ import { SearchTasks } from "../../src/application/usecases/tasks/SearchTasks.js
 import type { ClickUpGateway } from "../../src/infrastructure/clickup/ClickUpGateway.js";
 
 describe("Search integration", () => {
-  it("keeps fuzzy and REST outputs aligned on tasks with differing metadata", async () => {
+  it("keeps fuzzy and REST outputs consistent while exposing distinct metadata", async () => {
     const loader = vi.fn().mockResolvedValue([
       {
         taskId: "T1",
@@ -58,10 +58,11 @@ describe("Search integration", () => {
       throw new Error("Expected success");
     }
     expect(loader).toHaveBeenCalledTimes(1);
+    expect(fuzzyResult.data.results).toHaveLength(2);
+    expect(fuzzyResult.data.results.some(item => typeof item.score === "number")).toBe(true);
     const fuzzyIds = fuzzyResult.data.results.map(item => item.taskId);
     expect(new Set(fuzzyIds)).toEqual(new Set(["T1", "T2"]));
-    const fuzzyFirst = fuzzyResult.data.results[0];
-    expect(fuzzyFirst.score).not.toBeNull();
+    expect(fuzzyResult.data.results[0]?.updatedAt ?? "").not.toBe("");
     const restResult = await restUsecase.execute(
       {},
       { teamId: 5, query: "Alpha", limit: 2, page: 0, includeClosed: false }
@@ -79,14 +80,15 @@ describe("Search integration", () => {
       reverse: "true",
       search: "Alpha"
     });
+    expect(restResult.data.results).toHaveLength(2);
     const restIds = restResult.data.results.map(item => item.taskId);
     expect(new Set(restIds)).toEqual(new Set(["T1", "T2"]));
     const restFirst = restResult.data.results[0];
     expect(restFirst.dateUpdated).toContain("2025-02-02");
-    const restRecord = restFirst as Record<string, unknown>;
-    expect(restRecord.score).toBeUndefined();
-    const fuzzyRecord = fuzzyFirst as Record<string, unknown>;
-    expect(fuzzyRecord.dateUpdated).toBeUndefined();
-    expect(typeof fuzzyFirst.updatedAt === "string" || fuzzyFirst.updatedAt === null).toBe(true);
+    const restShape = restFirst as Record<string, unknown>;
+    expect(restShape.score).toBeUndefined();
+    const fuzzyFirst = fuzzyResult.data.results[0] as Record<string, unknown>;
+    expect(fuzzyFirst.dateUpdated).toBeUndefined();
+    expect(typeof fuzzyFirst.score === "number" || fuzzyFirst.score === null).toBe(true);
   });
 });

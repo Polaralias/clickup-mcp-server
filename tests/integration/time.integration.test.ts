@@ -6,7 +6,7 @@ import { ReportTimeForSpaceTag } from "../../src/application/usecases/time/Repor
 import type { ClickUpGateway } from "../../src/infrastructure/clickup/ClickUpGateway.js";
 
 describe("Time reporting integration", () => {
-  it("aggregates totals by tag, list, and space within tolerance", async () => {
+  it("aggregates totals across tag, list, and space tag scopes", async () => {
     const sharedEntries = [
       {
         id: "E1",
@@ -46,6 +46,9 @@ describe("Time reporting integration", () => {
     }
     const expectedTagTotal = 5400000 + 4500000;
     expect(Math.abs(tagResult.data.totals.totalMs - expectedTagTotal)).toBeLessThanOrEqual(5);
+    expect(tagResult.data.byTask[0]?.taskId).toBe("T-TAG-1");
+    expect(tagResult.data.byTask[0]?.totalMs).toBeGreaterThan(tagResult.data.byTask[1]?.totalMs ?? 0);
+    expect(new Set(tagResult.data.byMember.map(item => item.memberId))).toEqual(new Set([11, 12]));
     const listGateway = {
       search_tasks: vi.fn().mockResolvedValue({
         tasks: [
@@ -90,6 +93,9 @@ describe("Time reporting integration", () => {
     }
     const expectedListTotal = 2700000 + 3600000;
     expect(Math.abs(listResult.data.totals.totalMs - expectedListTotal)).toBeLessThanOrEqual(5);
+    expect(listResult.data.scope).toEqual({ type: "list", value: "L1" });
+    expect(listResult.data.byTask[0]?.taskId).toBe("T-LIST-2");
+    expect(listResult.data.byMember[0]?.memberId).toBe(21);
     const spaceGateway = {
       search_tasks_by_space_and_tag: vi.fn().mockResolvedValue({
         tasks: [
@@ -124,5 +130,7 @@ describe("Time reporting integration", () => {
     }
     const expectedSpaceTotal = 4200000;
     expect(Math.abs(spaceResult.data.totals.totalMs - expectedSpaceTotal)).toBeLessThanOrEqual(5);
+    expect(spaceResult.data.byTask).toHaveLength(1);
+    expect(spaceResult.data.byTask[0]?.billableMs).toBe(0);
   });
 });

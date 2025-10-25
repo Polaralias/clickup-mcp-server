@@ -7,15 +7,17 @@ import { withSafetyConfirmation } from "../../src/mcp/middleware/Safety.js";
 import type { ClickUpGateway } from "../../src/infrastructure/clickup/ClickUpGateway.js";
 
 describe("Task lifecycle integration", () => {
-  it("runs create, update, and delete with dry run previews", async () => {
+  it("performs create, update, and delete flows with dry-run enforcement", async () => {
     const gateway = {
       create_task: vi.fn().mockResolvedValue({ task: { id: "T123", url: "https://app/tasks/T123" } }),
       update_task: vi
         .fn()
         .mockResolvedValueOnce({ id: "T123", url: "https://app/tasks/T123" })
-        .mockResolvedValueOnce({ id: "T123", url: "https://app/tasks/T123", description: "Updated" }),
+        .mockResolvedValueOnce({ id: "T123", url: "https://app/tasks/T123" }),
       set_task_custom_field: vi.fn().mockResolvedValue(null),
-      get_task_by_id: vi.fn().mockResolvedValue({ id: "T123", description: "Existing body", url: "https://app/tasks/T123" }),
+      get_task_by_id: vi
+        .fn()
+        .mockResolvedValue({ id: "T123", description: "Existing body", url: "https://app/tasks/T123" }),
       add_task_comment: vi.fn().mockResolvedValue({ id: "C1" }),
       delete_task: vi.fn().mockResolvedValue({ id: "T123", url: "https://app/tasks/T123" })
     } satisfies Partial<ClickUpGateway>;
@@ -28,6 +30,7 @@ describe("Task lifecycle integration", () => {
       throw new Error("Expected success");
     }
     expect(createPreview.data.dryRun).toBe(true);
+    expect(createPreview.data.preview).toEqual({ listId: "L1", body: { name: "Alpha" } });
     expect(gateway.create_task).not.toHaveBeenCalled();
     const createResult = await createUsecase.execute({}, { listId: "L1", name: "Alpha" });
     expect(createResult.isError).toBe(false);
@@ -36,6 +39,7 @@ describe("Task lifecycle integration", () => {
     }
     expect(createResult.data.task.taskId).toBe("T123");
     expect(createResult.data.task.url).toBe("https://app/tasks/T123");
+    expect(createResult.truncated).not.toBe(true);
     expect(gateway.create_task).toHaveBeenCalledTimes(1);
     const updatePreview = await updateUsecase.execute(
       {},
@@ -52,7 +56,13 @@ describe("Task lifecycle integration", () => {
     if (updatePreview.isError) {
       throw new Error("Expected success");
     }
-    expect(updatePreview.data.dryRun).toBe(true);
+    expect(updatePreview.data.preview).toEqual({
+      taskId: "T123",
+      coreUpdate: { name: "Alpha Revised" },
+      customFieldUpdates: [{ fieldId: "F1", value: "done" }],
+      appendMarkdownDescription: "Added summary",
+      addCommentMarkdown: "Updated via integration"
+    });
     expect(gateway.update_task).not.toHaveBeenCalled();
     expect(gateway.set_task_custom_field).not.toHaveBeenCalled();
     expect(gateway.get_task_by_id).not.toHaveBeenCalled();
@@ -75,30 +85,29 @@ describe("Task lifecycle integration", () => {
       throw new Error("Expected success");
     }
     expect(gateway.update_task).toHaveBeenCalledTimes(2);
+    expect(gateway.update_task).toHaveBeenNthCalledWith(1, "T123", { name: "Alpha Revised" });
+    const appendedCall = gateway.update_task.mock.calls[1];
+    expect(appendedCall[0]).toBe("T123");
+    expect(typeof appendedCall[1]).toBe("object");
+    const body = appendedCall[1] as Record<string, unknown>;
+    expect(typeof body.description).toBe("string");
+    expect(String(body.description)).toContain("Existing body");
+    expect(String(body.description)).toContain("**Edit (2025-02-01):** Added summary");
     expect(gateway.set_task_custom_field).toHaveBeenCalledWith("T123", "F1", "done", undefined);
     expect(gateway.get_task_by_id).toHaveBeenCalledWith("T123");
     expect(gateway.add_task_comment).toHaveBeenCalledWith("T123", "Updated via integration");
-    const firstUpdate = gateway.update_task.mock.calls[0];
-    expect(firstUpdate[0]).toBe("T123");
-    expect(firstUpdate[1]).toEqual({ name: "Alpha Revised" });
-    const secondUpdate = gateway.update_task.mock.calls[1];
-    expect(secondUpdate[0]).toBe("T123");
-    const descriptionBody = secondUpdate[1] as Record<string, unknown>;
-    expect(typeof descriptionBody.description).toBe("string");
-    expect(descriptionBody.description).toContain("Existing body");
-    expect(descriptionBody.description).toContain("**Edit (2025-02-01):** Added summary");
-    expect(updateResult.data.taskId).toBe("T123");
     expect(updateResult.data.updated).toEqual({ core: true, customFields: 1, descriptionAppended: true, commentAdded: true });
-    const deleteResult = await deleteUsecase.execute({}, { taskId: "T123", confirm: "yes" });
+    expect(updateResult.data.url).toBe("https://app/tasks/T123");
+    const deleteResult = await deleteUsecase.execute({}, { taskId: "T123" });
     expect(deleteResult.isError).toBe(false);
     if (deleteResult.isError) {
       throw new Error("Expected success");
     }
-    expect(deleteResult.data.task.taskId).toBe("T123");
+    expect(deleteResult.data.task).toEqual({ taskId: "T123", url: "https://app/tasks/T123" });
     expect(gateway.delete_task).toHaveBeenCalledWith("T123");
   });
 
-  it("blocks delete without confirmation", async () => {
+  it("requires confirmation before deleting through middleware", async () => {
     const gateway = {
       delete_task: vi.fn().mockResolvedValue({ id: "T123" })
     } satisfies Partial<ClickUpGateway>;
