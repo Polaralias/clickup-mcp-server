@@ -40,6 +40,39 @@ describe("ClickUpGateway", () => {
     expect(calls.length).toBe(1);
   });
 
+  it("forwards content_format and isolates cache entries per format", async () => {
+    const kv = makeMemoryKV();
+    const cache = new ApiCache(kv);
+    const calls: HttpRequest[] = [];
+    const responses: HttpResponse[] = [
+      { status: 200, headers: {}, data: { total: 0, items: [], format: "md" } },
+      { status: 200, headers: {}, data: { total: 0, items: [], format: "html" } }
+    ];
+    const client = new HttpClient({
+      baseUrl: config.baseUrl,
+      transport: async request => {
+        calls.push(request);
+        const response = responses.shift();
+        if (!response) {
+          throw new Error("No more responses");
+        }
+        return response;
+      }
+    });
+    const gateway = new ClickUpGateway(client, cache, config);
+    const mdFirst = await gateway.search_docs(7, "roadmap", 20, 0, { content_format: "text/md" });
+    const mdSecond = await gateway.search_docs(7, "roadmap", 20, 0, { content_format: "text/md" });
+    const html = await gateway.search_docs(7, "roadmap", 20, 0, { content_format: "text/html" });
+    expect(mdFirst).toEqual({ total: 0, items: [], format: "md" });
+    expect(mdSecond).toEqual(mdFirst);
+    expect(html).toEqual({ total: 0, items: [], format: "html" });
+    expect(calls.length).toBe(2);
+    const firstUrl = new URL(calls[0].url);
+    const secondUrl = new URL(calls[1].url);
+    expect(firstUrl.searchParams.get("content_format")).toBe("text/md");
+    expect(secondUrl.searchParams.get("content_format")).toBe("text/html");
+  });
+
   it("paginates task fetch and stops when empty", async () => {
     const kv = makeMemoryKV();
     const cache = new ApiCache(kv);

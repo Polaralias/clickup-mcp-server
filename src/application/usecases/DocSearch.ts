@@ -192,14 +192,7 @@ export class DocSearch {
     const data = parsed.data;
     try {
       const format = data.contentFormat ?? "text/md";
-      const searchDocs = this.gateway.search_docs as unknown as (
-        workspaceId: number,
-        query: string,
-        limit: number,
-        page: number,
-        options?: { content_format?: string }
-      ) => Promise<unknown>;
-      const response = await searchDocs(data.workspaceId, data.query, data.limit, data.page, {
+      const response = await this.gateway.search_docs(data.workspaceId, data.query, data.limit, data.page, {
         content_format: format
       });
       const payload = response as { total?: unknown; items?: unknown } | null | undefined;
