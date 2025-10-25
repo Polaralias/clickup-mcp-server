@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ReportForContainerInput, ReportOutput } from "../../../mcp/tools/schemas/time.js";
 import { Result, ok, err } from "../../../shared/Result.js";
-import { mapHttpError } from "../../../shared/Errors.js";
+import { mapHttpError } from "../../../shared/httpErrors.js";
 import type { ClickUpGateway } from "../../../infrastructure/clickup/ClickUpGateway.js";
 import {
   fetchTasks,

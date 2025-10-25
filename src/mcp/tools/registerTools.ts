@@ -1,5 +1,4 @@
 import type { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
-import { createRequire } from "module";
 import { z } from "zod";
 import { CHARACTER_LIMIT, PROJECT_NAME } from "../../config/constants.js";
 import type { RuntimeConfig } from "../../config/runtime.js";
@@ -115,8 +114,7 @@ import { ResolvePath } from "../../application/usecases/resolve/ResolvePath.js";
 import { WorkspaceOverview } from "../../application/usecases/hierarchy/WorkspaceOverview.js";
 import { buildCatalogue, type ToolDef } from "./catalogue.js";
 import { withSafetyConfirmation } from "../middleware/Safety.js";
-
-type PackageMetadata = { version: string };
+import { PACKAGE_VERSION } from "../../shared/version.js";
 
 type ToolAnnotations = { readOnlyHint: boolean; idempotentHint: boolean; destructiveHint: boolean };
 
@@ -150,9 +148,6 @@ type CreateDocOutputType = z.infer<typeof CreateDocOutput>;
 type ListDocPagesOutputType = z.infer<typeof ListDocPagesOutput>;
 type GetDocPageOutputType = z.infer<typeof GetDocPageOutput>;
 type UpdateDocPageOutputType = z.infer<typeof UpdateDocPageOutput>;
-
-const require = createRequire(import.meta.url);
-const packageMetadata = require("../../../package.json") as PackageMetadata;
 
 export type RegisteredTool<TOutput = unknown> = {
   name: string;
@@ -857,7 +852,7 @@ async function executeHealth(input: unknown, context: ToolContext): Promise<Resu
   }
   return ok({
     service: PROJECT_NAME,
-    version: packageMetadata.version,
+    version: PACKAGE_VERSION,
     pid: process.pid,
     character_limit: CHARACTER_LIMIT,
     features: { persistence: context.runtime.featurePersistence },
@@ -1270,7 +1265,7 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
         description: tool.description,
         annotations: tool.annotations
       }));
-      const { payload } = buildCatalogue(PROJECT_NAME, packageMetadata.version, CHARACTER_LIMIT, toolDefs);
+      const { payload } = buildCatalogue(PROJECT_NAME, PACKAGE_VERSION, CHARACTER_LIMIT, toolDefs);
       const output = CatalogueOutput.parse(payload);
       return ok(output, output.truncated === true, output.guidance);
     }

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { CreateTaskInput, CreateTaskOutput } from "../../../mcp/tools/schemas/taskCrud.js";
 import type { CreateTaskSuccessOutput } from "../../../mcp/tools/schemas/taskCrud.js";
 import { Result, ok, err } from "../../../shared/Result.js";
-import { mapHttpError } from "../../../shared/Errors.js";
+import { mapHttpError } from "../../../shared/httpErrors.js";
 import { characterLimit } from "../../../config/runtime.js";
 import type { ClickUpGateway } from "../../../infrastructure/clickup/ClickUpGateway.js";
 

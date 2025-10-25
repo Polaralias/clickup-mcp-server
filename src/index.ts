@@ -24,7 +24,7 @@ async function main() {
   await startServer(runtime);
 }
 
-await main().catch(error => {
+main().catch(error => {
   logError("bootstrap", "startup_failed", { error });
   process.exitCode = 1;
 });

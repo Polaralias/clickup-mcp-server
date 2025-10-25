@@ -2,7 +2,7 @@ import { z } from "zod";
 import { WorkspaceOverviewInput, WorkspaceOverviewOutput, SpaceItem, FolderItem, ListItem } from "../../../mcp/tools/schemas/hierarchy.js";
 import { characterLimit } from "../../../config/runtime.js";
 import { err, ok, Result } from "../../../shared/Result.js";
-import { mapHttpError } from "../../../shared/Errors.js";
+import { mapHttpError } from "../../../shared/httpErrors.js";
 import type { ClickUpGateway } from "../../../infrastructure/clickup/ClickUpGateway.js";
 import { parseSpaces } from "./Spaces.js";
 import { parseFolders } from "./Folders.js";
