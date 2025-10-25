@@ -181,3 +181,9 @@ Intent: evaluate time spent on review activities while preserving traceability.
 * Anthropic Skill: “Safe, Reusable Cognition” (sections 2–5).
 * ISO-8601 time format reference.
 * OWASP API Security Top 10 (for ongoing governance review).
+
+## 13. Diagnostics Opt-In
+* Diagnostics capture is disabled by default. Toggle via `SettingsService` to call `DiagnosticsManager.enable()` only on explicit opt-in.
+* `DiagnosticsManager` keeps a 512 KB rolling log in memory and on disk, redacting API keys and ClickUp tokens before persistence.
+* Unhandled exceptions and rejections are mirrored into `/diagnostics/crash/*.json` when diagnostics are enabled.
+* Support bundle exports rely on `DiagnosticsManager.exportBundle`, producing a ZIP with crash reports, the redacted log file, and metadata required for support triage.

@@ -3,6 +3,10 @@ import { makeMemoryKV } from "./shared/KV.js";
 import { ApiCache } from "./infrastructure/cache/ApiCache.js";
 import { startServer } from "./mcp/server.js";
 import { configureLogging, logError, logInfo } from "./shared/logging.js";
+import { DiagnosticsManager } from "./shared/diagnostics/DiagnosticsManager.js";
+import { registerDiagnosticsManager } from "./shared/diagnostics/registry.js";
+import { SettingsService } from "./application/services/SettingsService.js";
+import { registerSettingsService } from "./application/services/settingsRegistry.js";
 
 function ensureRequiredEnvironment(): void {
   const missing: string[] = [];
@@ -30,6 +34,10 @@ process.on("SIGINT", () => {
 async function main() {
   const runtime = loadRuntimeConfig();
   configureLogging({ level: runtime.logLevel });
+  const diagnostics = new DiagnosticsManager();
+  registerDiagnosticsManager(diagnostics);
+  const settings = new SettingsService(diagnostics);
+  registerSettingsService(settings);
   ensureRequiredEnvironment();
   const kv = makeMemoryKV();
   const cache = new ApiCache(kv);
