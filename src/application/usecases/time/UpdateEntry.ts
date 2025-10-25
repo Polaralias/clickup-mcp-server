@@ -55,7 +55,8 @@ export class UpdateEntry {
     if (startMs !== null && endMs !== null && endMs <= startMs) {
       return err("INVALID_PARAMETER", "end must be after start");
     }
-    const body: Record<string, unknown> = {};
+    type UpdateTimeEntryBody = Parameters<ClickUpGateway["update_time_entry"]>[1];
+    const body: UpdateTimeEntryBody = {};
     if (startMs !== null) {
       body.start = String(Math.trunc(startMs));
     }

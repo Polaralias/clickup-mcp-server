@@ -53,7 +53,7 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
      const tool = tools.find(entry => entry.name === "clickup_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
@@ -63,7 +63,15 @@ describe("task fuzzy search tools", () => {
      if (result.isError) {
        throw new Error("Expected success result");
      }
-     const data = result.data;
+    const data = result.data as {
+      totalIndexed: number;
+      results: Array<{
+        taskId: string;
+        name?: string | null;
+        url: string;
+        score: number | null;
+      }>;
+    };
      expect(data.totalIndexed).toBe(2);
      expect(data.results.length).toBeGreaterThanOrEqual(1);
      const hit = data.results[0];
@@ -93,7 +101,7 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
      const tool = tools.find(entry => entry.name === "clickup_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
@@ -103,7 +111,7 @@ describe("task fuzzy search tools", () => {
      if (result.isError) {
        throw new Error("Expected success result");
      }
-     const first = result.data.results[0];
+    const first = (result.data as { results: Array<{ taskId: string; matchedFields: string[]; score: number | null }> }).results[0];
      expect(first.taskId).toBe("ABC1234");
      expect(first.matchedFields).toContain("id");
      expect(first.score).toBeNull();
@@ -162,7 +170,7 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
      const tool = tools.find(entry => entry.name === "clickup_bulk_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
@@ -175,7 +183,12 @@ describe("task fuzzy search tools", () => {
      if (result.isError) {
        throw new Error("Expected success result");
      }
-     const union = result.data.union;
+    const union = (result.data as {
+      union: {
+        results: Array<{ taskId: string }>;
+        dedupedCount: number;
+      };
+    }).union;
      expect(union.results[0].taskId).toBe("T2");
      expect(union.dedupedCount).toBe(2);
    });
@@ -202,7 +215,7 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
      const tool = tools.find(entry => entry.name === "clickup_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
@@ -233,7 +246,7 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
      const tool = tools.find(entry => entry.name === "clickup_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
@@ -243,7 +256,7 @@ describe("task fuzzy search tools", () => {
      if (result.isError) {
        throw new Error("Expected success result");
      }
-     const data = result.data;
+    const data = result.data as { truncated?: boolean; guidance?: string };
      expect(data.truncated).toBe(true);
      expect(data.guidance).toBe("Output trimmed to character_limit");
    });

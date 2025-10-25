@@ -38,8 +38,8 @@ describe("Time reporting integration", () => {
       }),
       list_time_entries: vi.fn().mockResolvedValue({ time_entries: sharedEntries, total: 2, page: 0, limit: 100 })
     } satisfies Partial<ClickUpGateway>;
-    const tagUsecase = new ReportTimeForTag(tagGateway as ClickUpGateway);
-    const tagResult = await tagUsecase.execute({}, { teamId: 7, tag: "focus" });
+    const tagUsecase = new ReportTimeForTag(tagGateway as unknown as ClickUpGateway);
+    const tagResult = await tagUsecase.execute({}, { teamId: 7, tag: "focus", includeBillable: true });
     expect(tagResult.isError).toBe(false);
     if (tagResult.isError) {
       throw new Error("Expected success");
@@ -85,8 +85,12 @@ describe("Time reporting integration", () => {
       }),
       list_view_tasks: vi.fn()
     } satisfies Partial<ClickUpGateway>;
-    const listUsecase = new ReportTimeForContainer(listGateway as ClickUpGateway);
-    const listResult = await listUsecase.execute({}, { teamId: 7, ref: { containerType: "list", containerId: "L1" } });
+    const listUsecase = new ReportTimeForContainer(listGateway as unknown as ClickUpGateway);
+    const listResult = await listUsecase.execute({}, {
+      teamId: 7,
+      includeBillable: true,
+      ref: { containerType: "list", containerId: "L1" }
+    });
     expect(listResult.isError).toBe(false);
     if (listResult.isError) {
       throw new Error("Expected success");
@@ -122,8 +126,13 @@ describe("Time reporting integration", () => {
         limit: 100
       })
     } satisfies Partial<ClickUpGateway>;
-    const spaceUsecase = new ReportTimeForSpaceTag(spaceGateway as ClickUpGateway);
-    const spaceResult = await spaceUsecase.execute({}, { teamId: 7, spaceId: "SPACE", tag: "ops" });
+    const spaceUsecase = new ReportTimeForSpaceTag(spaceGateway as unknown as ClickUpGateway);
+    const spaceResult = await spaceUsecase.execute({}, {
+      teamId: 7,
+      spaceId: "SPACE",
+      tag: "ops",
+      includeBillable: true
+    });
     expect(spaceResult.isError).toBe(false);
     if (spaceResult.isError) {
       throw new Error("Expected success");

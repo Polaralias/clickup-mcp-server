@@ -7,6 +7,11 @@ import type { ClickUpGateway } from "../../../infrastructure/clickup/ClickUpGate
 
 type InputType = z.infer<typeof CreateDocInput>;
 type OutputType = z.infer<typeof CreateDocOutput>;
+type ExecutionOutput = Extract<OutputType, { doc: DocRefLike }>;
+
+function hasDoc(output: OutputType): output is ExecutionOutput {
+  return "doc" in output;
+}
 
 type HttpErrorLike = { status?: number; data?: unknown };
 
@@ -96,7 +101,7 @@ function extractDocRef(payload: unknown, visited = new Set<unknown>()): DocRefLi
   return { docId, url, title: typeof title === "string" ? title : title ?? null };
 }
 
-function shrinkTitle(out: OutputType): boolean {
+function shrinkTitle(out: ExecutionOutput): boolean {
   const value = out.doc.title;
   if (typeof value !== "string" || value.length === 0) {
     return false;
@@ -113,7 +118,7 @@ function enforceLimit(out: OutputType): void {
     return;
   }
   let truncated = false;
-  while (payload.length > limit) {
+  while (hasDoc(out) && payload.length > limit) {
     if (!shrinkTitle(out)) {
       break;
     }
@@ -148,7 +153,7 @@ export class CreateDoc {
       const ref = extractDocRef(response);
       const docId = ref.docId ?? data.title;
       const docTitle = typeof ref.title === "string" ? ref.title : data.title;
-      const doc: OutputType["doc"] = { docId, title: docTitle };
+      const doc: ExecutionOutput["doc"] = { docId, title: docTitle };
       if (ref.url) {
         doc.url = ref.url;
       }

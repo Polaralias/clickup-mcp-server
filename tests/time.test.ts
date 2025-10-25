@@ -97,6 +97,9 @@ describe("Time tools", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
+    }
     expect(result.data.taskId).toBe("T1");
     expect(result.data.started).toBe(true);
     expect(result.data.running).toBe(true);
@@ -125,6 +128,9 @@ describe("Time tools", () => {
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");
+    }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
     }
     expect(result.data.taskId).toBe("T3");
     expect(result.data.stopped).toBe(true);
@@ -163,6 +169,9 @@ describe("Time tools", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
+    }
     expect(result.data.taskId).toBe("T4");
     expect(result.data.entryId).toBe("NE1");
   });
@@ -189,6 +198,9 @@ describe("Time tools", () => {
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");
+    }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
     }
     expect(result.data.entryId).toBe("DE1");
 

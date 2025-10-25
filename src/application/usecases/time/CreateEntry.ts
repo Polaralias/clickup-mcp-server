@@ -47,7 +47,8 @@ export class CreateEntry {
     if (endMs <= startMs) {
       return err("INVALID_PARAMETER", "end must be after start");
     }
-    const body: Record<string, unknown> = {
+    type CreateTimeEntryBody = Parameters<ClickUpGateway["create_time_entry"]>[1];
+    const body: CreateTimeEntryBody = {
       start: String(Math.trunc(startMs)),
       end: String(Math.trunc(endMs)),
       billable: data.billable

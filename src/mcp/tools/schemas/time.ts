@@ -19,7 +19,7 @@ export const StopTimerInput = z
 
 const TimerExecutionOutput = z
   .object({
-    taskId: z.string(),
+    taskId: z.string().optional(),
     started: z.boolean().optional(),
     stopped: z.boolean().optional(),
     entryId: z.string().optional(),

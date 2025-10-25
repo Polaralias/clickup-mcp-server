@@ -36,6 +36,9 @@ describe("UpdateTask", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
+    }
     expect(result.data.taskId).toBe("ABC");
     expect(result.data.updated.core).toBe(true);
     expect(result.data.updated.customFields).toBe(0);
@@ -70,6 +73,9 @@ describe("UpdateTask", () => {
     if (result.isError) {
       throw new Error("Expected success result");
     }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
+    }
     expect(result.data.updated.core).toBe(false);
     expect(result.data.updated.customFields).toBe(2);
     expect(result.data.updated.descriptionAppended).toBe(false);
@@ -101,6 +107,9 @@ describe("UpdateTask", () => {
     expect(result.isError).toBe(false);
     if (result.isError) {
       throw new Error("Expected success result");
+    }
+    if ("dryRun" in result.data) {
+      throw new Error("Expected execution result");
     }
     expect(result.data.updated.core).toBe(false);
     expect(result.data.updated.customFields).toBe(0);

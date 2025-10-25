@@ -50,8 +50,9 @@ describe("Search integration", () => {
       })
     } satisfies Partial<ClickUpGateway>;
     const index = new TaskSearchIndex(loader, 60);
-    const fuzzyUsecase = new TaskFuzzySearch(index, gateway as ClickUpGateway);
-    const restUsecase = new SearchTasks(gateway as ClickUpGateway);
+    const typedGateway = gateway as unknown as ClickUpGateway;
+    const fuzzyUsecase = new TaskFuzzySearch(index, typedGateway);
+    const restUsecase = new SearchTasks(typedGateway);
     const fuzzyResult = await fuzzyUsecase.execute({}, { query: "Alpha", limit: 2 });
     expect(fuzzyResult.isError).toBe(false);
     if (fuzzyResult.isError) {

@@ -208,7 +208,13 @@ export class BulkDocSearch {
     const failures: FailureCodeMap = new Map();
     const workItems: WorkItem<QuerySuccess>[] = queries.map((query, index) => {
       return async () => {
-        const request: DocSearchInputType = { workspaceId: data.workspaceId, query, limit, page };
+        const request: DocSearchInputType = {
+          workspaceId: data.workspaceId,
+          query,
+          limit,
+          page,
+          expandPages: false
+        };
         const result = await this.docSearch.execute(ctx, request);
         if (result.isError) {
           failures.set(index, result.code);

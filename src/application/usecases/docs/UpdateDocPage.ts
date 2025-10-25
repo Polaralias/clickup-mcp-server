@@ -31,7 +31,8 @@ export class UpdateDocPage {
       return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
     }
     const data = parsed.data;
-    const body: Record<string, unknown> = {
+    type UpdateDocPageBody = Parameters<ClickUpGateway["update_doc_page"]>[3];
+    const body: UpdateDocPageBody = {
       content_format: data.contentFormat,
       content: data.content
     };

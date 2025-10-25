@@ -29,7 +29,7 @@ describe("tool catalogue", () => {
       }
     };
     const cache = new ApiCache(makeMemoryKV());
-    return registerTools(server, runtime, { gateway: gateway as ClickUpGateway, cache });
+    return registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
   }
 
   it("Includes known tools and metadata", async () => {
