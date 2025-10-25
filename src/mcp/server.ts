@@ -1,7 +1,11 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  InitializeRequestSchema,
+  ListToolsRequestSchema
+} from "@modelcontextprotocol/sdk/types.js";
 import { createServer as createHttpServer, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { createLogger, newCorrelationId, withCorrelationId } from "../shared/logging.js";
@@ -58,7 +62,6 @@ function attachNotify(server: Server): NotifyingServer {
 
 async function startHttpServer(
   server: Server,
-  notifyingServer: NotifyingServer,
   tools: RegisteredTool[],
   transportConfig: HttpTransportConfig,
   logger: ReturnType<typeof createLogger>
@@ -108,8 +111,6 @@ async function startHttpServer(
   });
 
   console.log("ready");
-  const currentTools = buildToolList(tools);
-  await notifyingServer.notify("tools/list_changed", { tools: currentTools });
   logger.info("server_started", {
     transport: "http",
     tools: tools.map(tool => tool.name),
@@ -120,25 +121,43 @@ async function startHttpServer(
 
 async function startStdioServer(
   server: Server,
-  notifyingServer: NotifyingServer,
   tools: RegisteredTool[],
   logger: ReturnType<typeof createLogger>
 ): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.log("ready");
-  const currentTools = buildToolList(tools);
-  await notifyingServer.notify("tools/list_changed", { tools: currentTools });
   logger.info("server_started", { transport: "stdio", tools: tools.map(tool => tool.name) });
 }
 
 export async function startServer(runtime: RuntimeConfig): Promise<void> {
   const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
   server.registerCapabilities({ tools: { listChanged: true } });
-  const notifyingServer = attachNotify(server);
+  attachNotify(server);
   const tools = await registerTools(server, runtime);
   const toolMap = new Map<string, RegisteredTool>(tools.map(tool => [tool.name, tool]));
   const logger = createLogger("mcp.server");
+
+  const serverWithInitialize = server as Server & {
+    _oninitialize: (request: unknown) => Promise<unknown>;
+  };
+
+  server.setRequestHandler(InitializeRequestSchema, async (request, extra) =>
+    withCorrelationId(newCorrelationId(), async () => {
+      logger.info("initialize_requested");
+      const result = await serverWithInitialize._oninitialize(request);
+      try {
+        await extra.sendNotification({
+          method: "notifications/tools/list_changed",
+          params: { tools: buildToolList(tools) }
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        logger.error("tools_list_notification_failed", { reason });
+      }
+      return result;
+    })
+  );
 
   server.setRequestHandler(ListToolsRequestSchema, async () =>
     withCorrelationId(newCorrelationId(), async () => {
@@ -184,8 +203,8 @@ export async function startServer(runtime: RuntimeConfig): Promise<void> {
   );
 
   if (runtime.transport.kind === "http") {
-    await startHttpServer(server, notifyingServer, tools, runtime.transport, logger);
+    await startHttpServer(server, tools, runtime.transport, logger);
   } else {
-    await startStdioServer(server, notifyingServer, tools, logger);
+    await startStdioServer(server, tools, logger);
   }
 }
