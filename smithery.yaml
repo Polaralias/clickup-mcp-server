@@ -3,6 +3,7 @@ version: 1.0.0
 runtime:
   language: container
 startCommand:
+  type: stdio
   command: ["bash", "scripts/start.sh"]
 ports:
   - "8081"
