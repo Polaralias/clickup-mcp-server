@@ -1,6 +1,10 @@
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer as createHttpServer,
+  type IncomingMessage,
+  type ServerResponse
+} from "node:http";
 import type { AddressInfo } from "node:net";
 import { URL } from "node:url";
 import { PROJECT_NAME } from "../config/constants.js";
@@ -9,10 +13,10 @@ import { getServerContext, waitForServerReady } from "./factory.js";
 import { withSessionScope } from "../shared/config/session.js";
 
 const INITIALISE_TIMEOUT_MS = 8000;
-const ALLOWED_METHODS = new Set(["initialize", "tools/list", "tools/call"]);
 const SUPPORTED_PATHS = new Set(["/", "/mcp"]);
 const MAX_BODY_BYTES = 1024 * 1024;
-const DEFAULT_PROTOCOL_VERSION = "2025-03-26";
+const DEFAULT_PROTOCOL_VERSION = "2025-06-18";
+const READ_TIMEOUT_MS = 5000;
 
 type JsonRpcRequest = {
   jsonrpc?: string;
@@ -51,6 +55,7 @@ function addCorsHeaders(response: ServerResponse): void {
   response.setHeader("Access-Control-Allow-Origin", "*");
   response.setHeader("Access-Control-Allow-Headers", "*");
   response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  response.setHeader("Content-Type", "application/json");
 }
 
 function readBody(request: IncomingMessage): Promise<string> {
@@ -58,6 +63,14 @@ function readBody(request: IncomingMessage): Promise<string> {
     const chunks: Buffer[] = [];
     let total = 0;
     let aborted = false;
+    const timer = setTimeout(() => {
+      if (aborted) {
+        return;
+      }
+      aborted = true;
+      reject(new Error("Request timeout"));
+      request.destroy();
+    }, READ_TIMEOUT_MS);
     request.on("data", chunk => {
       if (aborted) {
         return;
@@ -66,6 +79,7 @@ function readBody(request: IncomingMessage): Promise<string> {
       total += buffer.length;
       if (total > MAX_BODY_BYTES) {
         aborted = true;
+        clearTimeout(timer);
         reject(new PayloadTooLargeError());
         request.destroy();
         return;
@@ -76,6 +90,7 @@ function readBody(request: IncomingMessage): Promise<string> {
       if (aborted) {
         return;
       }
+      clearTimeout(timer);
       resolve(Buffer.concat(chunks).toString("utf8"));
     });
     request.on("error", error => {
@@ -83,17 +98,22 @@ function readBody(request: IncomingMessage): Promise<string> {
         return;
       }
       aborted = true;
+      clearTimeout(timer);
       reject(error instanceof Error ? error : new Error(String(error)));
+    });
+    request.on("aborted", () => {
+      if (aborted) {
+        return;
+      }
+      aborted = true;
+      clearTimeout(timer);
+      reject(new Error("Request aborted"));
     });
   });
 }
 
 function invalidRequest(id: string | number | null): { jsonrpc: "2.0"; error: JsonRpcError; id: string | number | null } {
   return { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request" }, id };
-}
-
-function methodNotFound(id: string | number | null): { jsonrpc: "2.0"; error: JsonRpcError; id: string | number | null } {
-  return { jsonrpc: "2.0", error: { code: -32601, message: "Method not found" }, id };
 }
 
 function parseUrl(raw: string | undefined): URL {
@@ -193,14 +213,21 @@ export async function startHttpBridge(server: Server, options: { port: number; h
     const path = url.pathname;
     const method = request.method ?? "";
     const shouldLog = debugEnabled();
+    const started = shouldLog ? Date.now() : 0;
+    if (request.headers.expect?.toLowerCase() === "100-continue") {
+      response.writeContinue();
+    }
     if (shouldLog) {
       response.on("finish", () => {
-        context.logger.info("http_request", {
-          method,
-          path,
-          contentLength: request.headers["content-length"],
-          status: response.statusCode
-        });
+        const elapsed = Date.now() - started;
+        console.log(
+          JSON.stringify({
+            method,
+            url: request.url ?? path,
+            status: response.statusCode,
+            elapsedMs: elapsed
+          })
+        );
       });
     }
     if (method === "OPTIONS" && SUPPORTED_PATHS.has(path)) {
@@ -223,12 +250,21 @@ export async function startHttpBridge(server: Server, options: { port: number; h
       const body = await readBody(request);
       payload = (body ? (JSON.parse(body) as JsonRpcRequest) : {}) ?? {};
     } catch (error) {
-      const status = error instanceof PayloadTooLargeError ? 413 : 400;
+      const status =
+        error instanceof PayloadTooLargeError
+          ? 413
+          : error instanceof Error && error.message === "Request timeout"
+            ? 408
+            : error instanceof Error && error.message === "Request aborted"
+              ? 499
+              : 400;
       const reason = error instanceof Error ? error.message : String(error);
       const body =
         error instanceof PayloadTooLargeError
           ? { error: "Payload Too Large" }
-          : { jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null };
+          : status === 400
+            ? { jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null }
+            : { error: reason };
       response.writeHead(status, { "Content-Type": "application/json" });
       response.end(JSON.stringify(body));
       context.logger.warn("http_request_parse_error", {
@@ -241,21 +277,22 @@ export async function startHttpBridge(server: Server, options: { port: number; h
       response.end(JSON.stringify(invalidRequest(payload.id ?? null)));
       return;
     }
-    if (!ALLOWED_METHODS.has(payload.method)) {
-      response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify(methodNotFound(payload.id ?? null)));
-      return;
-    }
     const connectionId = `${request.socket.remoteAddress ?? "unknown"}:${request.socket.remotePort ?? "0"}`;
     const timeout = payload.method === "initialize" ? INITIALISE_TIMEOUT_MS : undefined;
+    if (process.env.MCP_PANIC_MODE === "1") {
+      const id = payload.id ?? null;
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ jsonrpc: "2.0", id, result: {} }));
+      return;
+    }
     if (payload.method === "initialize") {
-      const methodName = payload.method;
       const id = payload.id ?? null;
       const params = isRecord(payload.params) ? payload.params : {};
       const protocolVersionRaw = params.protocolVersion;
-      const protocolVersion = typeof protocolVersionRaw === "string" && protocolVersionRaw.length > 0
-        ? protocolVersionRaw
-        : DEFAULT_PROTOCOL_VERSION;
+      const protocolVersion =
+        typeof protocolVersionRaw === "string" && protocolVersionRaw.length > 0
+          ? protocolVersionRaw
+          : DEFAULT_PROTOCOL_VERSION;
       const result = {
         protocolVersion,
         capabilities: { tools: { listChanged: true } },
@@ -263,15 +300,6 @@ export async function startHttpBridge(server: Server, options: { port: number; h
       };
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ jsonrpc: "2.0", id, result }));
-      setImmediate(() => {
-        void dispatch(methodName, payload.params, connectionId, {
-          timeoutMs: timeout,
-          skipReady: true
-        }).catch(error => {
-          const reason = error instanceof Error ? error.message : String(error);
-          context.logger.warn("http_initialize_forward_failed", { reason });
-        });
-      });
       return;
     }
     try {
@@ -303,6 +331,9 @@ export async function startHttpBridge(server: Server, options: { port: number; h
       });
     }
   });
+  httpServer.requestTimeout = 15000;
+  httpServer.headersTimeout = 15000;
+  httpServer.keepAliveTimeout = 5000;
   const actualPort = await new Promise<number>((resolve, reject) => {
     httpServer.once("error", reject);
     const onListen = () => {
