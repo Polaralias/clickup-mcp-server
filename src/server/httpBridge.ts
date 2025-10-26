@@ -109,7 +109,8 @@ function debugEnabled(): boolean {
   return normalised !== "0" && normalised !== "false";
 }
 
-export async function startHttpBridge(server: Server, port: number): Promise<number> {
+export async function startHttpBridge(server: Server, options: { port: number; host?: string }): Promise<number> {
+  const { port, host } = options;
   const context = getServerContext(server);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -304,7 +305,7 @@ export async function startHttpBridge(server: Server, port: number): Promise<num
   });
   const actualPort = await new Promise<number>((resolve, reject) => {
     httpServer.once("error", reject);
-    httpServer.listen(port, () => {
+    const onListen = () => {
       httpServer.off("error", reject);
       const address = httpServer.address();
       if (address && typeof address === "object") {
@@ -316,7 +317,12 @@ export async function startHttpBridge(server: Server, port: number): Promise<num
         return;
       }
       resolve(port);
-    });
+    };
+    if (host) {
+      httpServer.listen(port, host, onListen);
+    } else {
+      httpServer.listen(port, onListen);
+    }
   });
   return actualPort;
 }

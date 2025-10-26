@@ -14,4 +14,4 @@ COPY --from=builder /app/dist ./dist
 ENV NODE_ENV=production
 ENV PORT=8081
 EXPOSE 8081
-CMD ["node","dist/src/index.js"]
+CMD ["node","dist/index.js"]
