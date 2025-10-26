@@ -98,13 +98,24 @@ function resolveRequestTimeout(value: number | undefined): number {
   return Math.ceil(value / 1000);
 }
 
-export function fromEnv(): AppConfig {
-  const apiToken = toOptionalString(process.env.CLICKUP_TOKEN) ?? "";
-  const defaultTeamId = parseOptionalInteger(process.env.CLICKUP_DEFAULT_TEAM_ID ?? undefined);
-  const primaryLanguage = toOptionalString(process.env.CLICKUP_PRIMARY_LANGUAGE);
-  const baseUrl = toOptionalString(process.env.CLICKUP_BASE_URL);
-  const requestTimeoutMs = parseOptionalInteger(process.env.REQUEST_TIMEOUT_MS ?? undefined);
-  const defaultHeadersJson = toOptionalString(process.env.DEFAULT_HEADERS_JSON);
+type EnvSource = Record<string, string | undefined>;
+
+function resolveEnv(source?: EnvSource): EnvSource {
+  return source ?? process.env;
+}
+
+function readEnv(env: EnvSource, key: string): string | undefined {
+  return env[key];
+}
+
+export function fromEnv(env?: EnvSource): AppConfig {
+  const source = resolveEnv(env);
+  const apiToken = toOptionalString(readEnv(source, "CLICKUP_TOKEN")) ?? "";
+  const defaultTeamId = parseOptionalInteger(readEnv(source, "CLICKUP_DEFAULT_TEAM_ID"));
+  const primaryLanguage = toOptionalString(readEnv(source, "CLICKUP_PRIMARY_LANGUAGE"));
+  const baseUrl = toOptionalString(readEnv(source, "CLICKUP_BASE_URL"));
+  const requestTimeoutMs = parseOptionalInteger(readEnv(source, "REQUEST_TIMEOUT_MS"));
+  const defaultHeadersJson = toOptionalString(readEnv(source, "DEFAULT_HEADERS_JSON"));
   return {
     apiToken,
     defaultTeamId,
