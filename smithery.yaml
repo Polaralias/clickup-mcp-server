@@ -6,8 +6,8 @@ runtime: typescript
 
 startCommand:
   commandFunction:
-    file: src/server/factory.ts
-    export: createServer
+    file: src/server/smithery.ts
+    export: createServerFromSmithery
 
 environment:
   required:
