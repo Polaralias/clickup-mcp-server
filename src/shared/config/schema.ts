@@ -1,10 +1,14 @@
-export type AppConfig = {
-  apiToken?: string;
-  authScheme?: string;
-  baseUrl?: string;
+import { URL } from "node:url";
+
+export type AuthScheme = "auto" | "personal_token" | "oauth";
+
+export type SessionConfig = {
+  apiToken: string;
+  authScheme: AuthScheme;
+  baseUrl: string;
   defaultTeamId?: number;
-  requestTimeout?: number;
-  defaultHeaders?: Record<string, string>;
+  requestTimeout: number;
+  defaultHeaders: Record<string, string>;
 };
 
 function toOptionalString(value: string | undefined): string | undefined {
@@ -15,7 +19,7 @@ function toOptionalString(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function parseOptionalNumber(value: string | undefined): number | undefined {
+function parseOptionalInteger(value: string | undefined): number | undefined {
   const raw = toOptionalString(value);
   if (!raw) {
     return undefined;
@@ -27,51 +31,100 @@ function parseOptionalNumber(value: string | undefined): number | undefined {
   return parsed;
 }
 
-function parseHeaderMap(value: string | undefined): Record<string, string> | undefined {
+function parseDefaultHeaders(value: string | undefined): Record<string, string> {
   const raw = toOptionalString(value);
   if (!raw) {
-    return undefined;
+    return {};
   }
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return undefined;
+      return {};
     }
-    const normalised: Record<string, string> = {};
+    const entries: Record<string, string> = {};
     for (const [key, entry] of Object.entries(parsed)) {
       if (typeof entry === "string") {
-        normalised[key] = entry;
+        entries[key] = entry;
       } else if (entry !== undefined && entry !== null) {
-        normalised[key] = String(entry);
+        entries[key] = String(entry);
       }
     }
-    return Object.keys(normalised).length > 0 ? normalised : undefined;
+    return entries;
   } catch {
-    return undefined;
+    return {};
   }
 }
 
-export function fromEnv(): AppConfig {
-  const apiToken = toOptionalString(process.env.CLICKUP_TOKEN);
-  const defaultTeamId = parseOptionalNumber(process.env.CLICKUP_DEFAULT_TEAM_ID);
-  const authScheme = toOptionalString(process.env.CLICKUP_AUTH_SCHEME);
-  const baseUrl = toOptionalString(process.env.CLICKUP_BASE_URL);
-  const requestTimeout = parseOptionalNumber(process.env.REQUEST_TIMEOUT_MS);
-  const primaryLanguage = toOptionalString(process.env.CLICKUP_PRIMARY_LANGUAGE);
-  const headers = parseHeaderMap(process.env.DEFAULT_HEADERS_JSON) ?? {};
-  if (primaryLanguage && !headers["Accept-Language"]) {
-    headers["Accept-Language"] = primaryLanguage;
+function resolveAuthScheme(value: string | undefined): AuthScheme {
+  if (value === "oauth" || value === "personal_token" || value === "auto") {
+    return value;
   }
-  const defaultHeaders = Object.keys(headers).length > 0 ? headers : undefined;
-  return { apiToken, authScheme, baseUrl, defaultTeamId, requestTimeout, defaultHeaders };
+  return "auto";
 }
 
-export function validateOrThrow(config: AppConfig): void {
+function parseTimeoutSeconds(value: string | undefined): number {
+  const parsed = parseOptionalInteger(value);
+  if (parsed === undefined) {
+    return 30;
+  }
+  if (parsed <= 0) {
+    return 30;
+  }
+  return Math.ceil(parsed / 1000);
+}
+
+export function normaliseBaseUrl(value: string | undefined): string {
+  const fallback = "https://api.clickup.com/api/v2";
+  const raw = toOptionalString(value);
+  if (!raw) {
+    return fallback;
+  }
+  const prefixed = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let url: URL;
+  try {
+    url = new URL(prefixed);
+  } catch {
+    return fallback;
+  }
+  const segments = url.pathname.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    url.pathname = "/api/v2";
+  } else if (segments[0] === "api") {
+    if (segments.length === 1) {
+      segments.push("v2");
+    }
+    url.pathname = `/${segments.join("/")}`;
+  } else {
+    url.pathname = `/${segments.join("/")}`;
+  }
+  url.hash = "";
+  url.search = "";
+  return url.toString().replace(/\/+$/, "");
+}
+
+export function fromEnv(): SessionConfig {
+  const apiToken = toOptionalString(process.env.CLICKUP_TOKEN) ?? "";
+  const authScheme = resolveAuthScheme(process.env.CLICKUP_AUTH_SCHEME);
+  const baseUrl = normaliseBaseUrl(process.env.CLICKUP_BASE_URL);
+  const defaultTeamId = parseOptionalInteger(process.env.CLICKUP_DEFAULT_TEAM_ID);
+  const requestTimeout = parseTimeoutSeconds(process.env.REQUEST_TIMEOUT_MS);
+  const defaultHeaders = parseDefaultHeaders(process.env.DEFAULT_HEADERS_JSON);
+  const language = toOptionalString(process.env.CLICKUP_PRIMARY_LANGUAGE);
+  if (language && !defaultHeaders["Accept-Language"]) {
+    defaultHeaders["Accept-Language"] = language;
+  }
+  return {
+    apiToken,
+    authScheme,
+    baseUrl,
+    defaultTeamId,
+    requestTimeout,
+    defaultHeaders
+  };
+}
+
+export function validateOrThrow(config: SessionConfig): void {
   if (!config.apiToken) {
     throw new Error("Missing ClickUp API token");
-  }
-  const teamId = config.defaultTeamId;
-  if (teamId === undefined || !Number.isFinite(teamId)) {
-    throw new Error("Missing or invalid default team id");
   }
 }
