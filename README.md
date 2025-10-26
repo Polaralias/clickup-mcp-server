@@ -67,3 +67,17 @@ To deploy ClickUp-MCP-Server on Smithery:
 
 The server will start via `scripts/start.sh` and connect over standard IO as an MCP instance.
 Logs are emitted in JSON lines to stdout.
+
+## Deploy on Smithery (TypeScript runtime)
+
+Smithery's TypeScript runtime can instantiate the MCP server directly from the exported factory without using the HTTP bridge.
+
+1. Create or update `smithery.yaml` so it uses the TypeScript runtime and points `startCommand.commandFunction` at `src/server/factory.ts#createServer`.
+2. Provide the required `CLICKUP_TOKEN` secret along with any optional ClickUp configuration variables (team ID, base URL, timeouts, custom headers, etc.).
+3. Configure optional runtime tuning variables as needed (for example `LOG_LEVEL`, `FEATURE_PERSISTENCE`, `MCP_HTTP_*`, `MAX_ATTACHMENT_MB`, or `MAX_BULK_CONCURRENCY`).
+4. Deploy with:
+   ```bash
+   smithery deploy
+   ```
+
+Smithery will call the factory, connect over stdio, and emit tool metadata once the server is ready.
