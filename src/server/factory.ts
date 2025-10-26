@@ -42,7 +42,16 @@ type ServerContext = {
   toolList: ToolListEntry[];
   logger: ReturnType<typeof createLogger>;
   session: SessionConfig;
+  defaultConnectionId: string;
   ready: Promise<void>;
+};
+
+export type CreateServerOptions = {
+  /**
+   * Connection identifier applied to implicit session scopes (e.g. stdio transport).
+   * Defaults to "stdio" for backwards compatibility.
+   */
+  defaultConnectionId?: string;
 };
 
 function ensureGatewayPatched(): void {
@@ -102,15 +111,16 @@ function attachNotify(server: Server): NotifyingServer {
   return target;
 }
 
-function defaultSessionScope(config: SessionConfig): SessionScope {
-  return { config, connectionId: "stdio" };
+function buildSessionScope(config: SessionConfig, connectionId: string): SessionScope {
+  return { config, connectionId };
 }
 
-export function createServer(config: AppConfig): Server {
+export function createServer(config: AppConfig, options?: CreateServerOptions): Server {
   ensureGatewayPatched();
   const runtime = loadRuntimeConfig();
   configureLogging({ level: runtime.logLevel });
   const sessionConfig = toSessionConfig(config);
+  const defaultConnectionId = options?.defaultConnectionId ?? "stdio";
   const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
   server.registerCapabilities({ tools: { listChanged: true } });
   const notifier = attachNotify(server);
@@ -123,6 +133,7 @@ export function createServer(config: AppConfig): Server {
     toolList: [],
     logger,
     session: sessionConfig,
+    defaultConnectionId,
     ready: Promise.resolve()
   };
   const ready = (async () => {
@@ -133,7 +144,7 @@ export function createServer(config: AppConfig): Server {
   })();
   context.ready = ready;
   server.setRequestHandler(ListToolsRequestSchema, async () =>
-    withSessionScope(defaultSessionScope(sessionConfig), () =>
+    withSessionScope(buildSessionScope(sessionConfig, defaultConnectionId), () =>
       withCorrelationId(newCorrelationId(), async () => {
         await ready;
         logger.info("list_tools_requested");
@@ -142,7 +153,7 @@ export function createServer(config: AppConfig): Server {
     )
   );
   server.setRequestHandler(CallToolRequestSchema, async request =>
-    withSessionScope(defaultSessionScope(sessionConfig), () =>
+    withSessionScope(buildSessionScope(sessionConfig, defaultConnectionId), () =>
       withCorrelationId(newCorrelationId(), async () => {
         await ready;
         const toolName = request.params.name;
