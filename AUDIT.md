@@ -5,3 +5,6 @@
 
 ## 2025-10-26
 - Updated the Smithery deployment configuration to use the container runtime with the explicit start command to satisfy schema validation.
+
+## 2025-02-14
+- Extended the HTTP bridge to accept `/` and `/mcp`, added a fast initialise handshake, health endpoint, and guarded debug logging, and deferred heavy warm-ups until after the ready signal.

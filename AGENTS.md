@@ -155,6 +155,8 @@ Maintainers and LLM-based extensions must uphold the following:
   * `MCP_HTTP_INITIALIZE_TIMEOUT_MS` (default `45000`) to control the HTTP bridge timeout for `initialize` requests.
 * HTTP responses include permissive CORS headers unless overridden via the env vars above.
 * Both transports emit `tools/list_changed` notifications after connection to signal readiness.
+* The HTTP bridge now accepts POST requests on both `/` and `/mcp`, serves `GET /healthz`, caps JSON bodies at 1 MB, and honours `OPTIONS` for those paths with CORS headers.
+* `MCP_DEBUG` defaults to `1`, which logs the request line and status for each HTTP interaction without exposing payloads.
 
 ## 11. Workflow Examples and Patterns
 ### Example A: Automated backlog triage
