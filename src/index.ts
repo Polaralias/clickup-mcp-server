@@ -4,6 +4,10 @@ import { logError, logInfo } from "./shared/logging.js";
 import { startHttpBridge } from "./server/httpBridge.js";
 import { fromEnv, validateOrThrow } from "./shared/config/schema.js";
 
+if (!process.env.MCP_DEBUG) {
+  process.env.MCP_DEBUG = "1";
+}
+
 function parsePort(value: string | undefined): number | undefined {
   if (!value) {
     return undefined;
@@ -25,6 +29,26 @@ async function startStdio(server: ReturnType<typeof createServer>): Promise<void
     transport: "stdio",
     tools: context.tools.map(tool => tool.name)
   });
+}
+
+async function postReadyInit(
+  server: ReturnType<typeof createServer>,
+  transport: "http" | "stdio",
+  extras?: { port?: number }
+): Promise<void> {
+  const context = getServerContext(server);
+  try {
+    await waitForServerReady(server);
+    await context.notifier.notify("tools/list_changed", { tools: context.toolList });
+    const payload: Record<string, unknown> = { transport };
+    if (extras?.port !== undefined) {
+      payload.port = extras.port;
+    }
+    context.logger.info("server_started", payload);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    logError("bootstrap", "post_ready_init_failed", { reason, transport, extras });
+  }
 }
 
 process.on("SIGTERM", () => {
@@ -52,8 +76,11 @@ async function main(): Promise<void> {
   const useHttp = process.env.SMITHERY_HTTP === "1" || Boolean(process.env.PORT);
   if (useHttp) {
     const port = parsePort(process.env.PORT) ?? 8081;
-    await startHttpBridge(server, port);
-    console.log(JSON.stringify({ event: "ready", transport: "http", port }));
+    const actualPort = await startHttpBridge(server, port);
+    console.log(JSON.stringify({ event: "ready", transport: "http", port: actualPort }));
+    setImmediate(() => {
+      void postReadyInit(server, "http", { port: actualPort });
+    });
   } else {
     await startStdio(server);
     console.log(JSON.stringify({ event: "ready", transport: "stdio" }));
