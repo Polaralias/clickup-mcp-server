@@ -9,11 +9,15 @@ type SmitheryCommandContext = {
 export function createServerFromSmithery(
   context: SmitheryCommandContext | undefined
 ): Server {
-  const combinedEnv: Record<string, string | undefined> = {
-    ...process.env,
-    ...(context?.env ?? {})
-  };
-  const config = fromEnv(combinedEnv);
+  const smitheryEnv = context?.env ?? {};
+  for (const [key, value] of Object.entries(smitheryEnv)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+  const config = fromEnv();
   validateOrThrow(config);
   return createServer(config);
 }
