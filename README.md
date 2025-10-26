@@ -32,6 +32,22 @@ Stdout streams structured JSON logs while ClickUp-MCP communicates over standard
 
 To verify tools, run ClickUp-MCP with an MCP client and list the available tools.
 
+## Local stdio run
+
+After building the project you can launch the production bundle over stdio:
+
+```
+CLICKUP_TOKEN=xxxxx node dist/hosts/stdio.js
+```
+
+The host will validate configuration, start the MCP server, and emit a single readiness line:
+
+```
+{"event":"ready","transport":"stdio"}
+```
+
+Send `SIGINT` (`Ctrl+C`) or `SIGTERM` to trigger a graceful shutdown.
+
 ## Deploying with Smithery
 
 To deploy ClickUp-MCP-Server on Smithery:
@@ -51,34 +67,3 @@ To deploy ClickUp-MCP-Server on Smithery:
 
 The server will start via `scripts/start.sh` and connect over standard IO as an MCP instance.
 Logs are emitted in JSON lines to stdout.
-
-## Container and Smithery deploy
-
-Local run:
-
-CLICKUP_TOKEN=xxxxx PORT=8081 SMITHERY_HTTP=1 node dist/index.js
-
-Health check:
-
-curl -s http://127.0.0.1:8081/healthz
-
-Initialise:
-
-curl -s -X POST http://127.0.0.1:8081/mcp \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"local","version":"0.1.0"}}}'
-
-## Local HTTP self-test
-
-Use the following sequence to validate the HTTP bridge end to end:
-
-```bash
-PORT=8081 SMITHERY_HTTP=1 CLICKUP_TOKEN=redacted node dist/index.js
-curl -s http://127.0.0.1:8081/healthz
-curl -s -X POST http://127.0.0.1:8081/ \
-  -H 'Content-Type: application/json' -H 'Accept: application/json' \
-  -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.1"}}}'
-curl -s -X POST http://127.0.0.1:8081/mcp \
-  -H 'Content-Type: application/json' -H 'Accept: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-```
