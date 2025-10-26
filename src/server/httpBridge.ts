@@ -1,26 +1,19 @@
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { URL } from "node:url";
+import { getServerContext, waitForServerReady } from "./factory.js";
+import {
+  deriveSessionScope,
+  generateConnectionKey,
+  runWithSessionScope,
+  type SessionScope
+} from "../shared/config/session.js";
+import type { SessionConfig } from "../shared/config/schema.js";
 
-const serverContextSymbol = Symbol.for("clickup.mcp.serverContext");
+const INITIALISE_TIMEOUT_MS = 8000;
 
-type ToolListEntry = {
-  name: string;
-  description: string;
-  annotations: { readOnlyHint: boolean; idempotentHint: boolean; destructiveHint: boolean };
-  inputSchema: Record<string, unknown>;
-};
-
-type ServerContext = {
-  notifier: { notify: (method: string, params: unknown) => Promise<void> };
-  toolList: ToolListEntry[];
-  logger: {
-    info: (message: string, extras?: Record<string, unknown>) => void;
-    warn: (message: string, extras?: Record<string, unknown>) => void;
-    error: (message: string, extras?: Record<string, unknown>) => void;
-  };
-  runtime?: { httpInitializeTimeoutMs: number };
-};
+const ALLOWED_METHODS = new Set(["initialize", "tools/list", "tools/call"]);
 
 type JsonRpcRequest = {
   jsonrpc?: string;
@@ -46,14 +39,6 @@ type PendingRequest = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function getContext(server: Server): ServerContext {
-  const context = Reflect.get(server, serverContextSymbol) as ServerContext | undefined;
-  if (!context) {
-    throw new Error("Server context unavailable");
-  }
-  return context;
 }
 
 function addCorsHeaders(response: ServerResponse): void {
@@ -96,15 +81,17 @@ function parseUrl(raw: string | undefined): URL {
   return new URL(raw ?? "", "http://localhost");
 }
 
-export async function startHttpBridge(server: Server, opts: { port: number }): Promise<void> {
-  const context = getContext(server);
+export async function startHttpBridge(
+  server: Server,
+  baseSession: SessionConfig,
+  opts: { port: number }
+): Promise<void> {
+  const context = getServerContext(server);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await clientTransport.start();
   let nextId = 1;
   const pending = new Map<number, PendingRequest>();
-  const initializeTimeoutMs = context.runtime?.httpInitializeTimeoutMs ?? 45_000;
-
   clientTransport.onmessage = message => {
     const payload = message as Record<string, unknown>;
     const idValue = payload?.id;
@@ -127,7 +114,6 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
     };
     entry.resolve(response);
   };
-
   clientTransport.onclose = () => {
     for (const entry of pending.values()) {
       if (entry.timer) {
@@ -137,8 +123,13 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
     }
     pending.clear();
   };
-
-  async function sendRequest(method: string, params: unknown, timeoutMs?: number): Promise<JsonRpcResponseMessage> {
+  async function dispatch(
+    method: string,
+    params: unknown,
+    scope: SessionScope,
+    timeoutMs?: number
+  ): Promise<JsonRpcResponseMessage> {
+    await waitForServerReady(server);
     const id = nextId++;
     const payload = {
       jsonrpc: "2.0" as const,
@@ -146,28 +137,29 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
       method,
       params: isRecord(params) ? params : undefined
     };
-    return new Promise((resolve, reject) => {
-      const timer = timeoutMs
-        ? setTimeout(() => {
-            pending.delete(id);
-            reject(new Error("Request timed out"));
-          }, timeoutMs)
-        : undefined;
-      pending.set(id, {
-        resolve,
-        reject,
-        timer
-      });
-      clientTransport.send(payload).catch(error => {
-        if (timer) {
-          clearTimeout(timer);
-        }
-        pending.delete(id);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      });
-    });
+    return runWithSessionScope(scope, () =>
+      new Promise((resolve, reject) => {
+        const timer = timeoutMs
+          ? setTimeout(() => {
+              pending.delete(id);
+              reject(new Error("Request timed out"));
+            }, timeoutMs)
+          : undefined;
+        pending.set(id, {
+          resolve,
+          reject,
+          timer
+        });
+        clientTransport.send(payload).catch(error => {
+          if (timer) {
+            clearTimeout(timer);
+          }
+          pending.delete(id);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
+      })
+    );
   }
-
   const httpServer = createHttpServer(async (request, response) => {
     addCorsHeaders(response);
     if (request.method === "OPTIONS") {
@@ -211,15 +203,19 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
       response.end(JSON.stringify(invalidRequest(payload.id ?? null)));
       return;
     }
-    const allowed = payload.method === "initialize" || payload.method === "tools/list" || payload.method === "tools/call";
-    if (!allowed) {
+    if (!ALLOWED_METHODS.has(payload.method)) {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify(methodNotFound(payload.id ?? null)));
       return;
     }
-    const timeout = payload.method === "initialize" ? initializeTimeoutMs : undefined;
+    const headerSessionId = request.headers["mcp-session-id"];
+    const scope = deriveSessionScope(baseSession, url.searchParams, {
+      headerSessionId: typeof headerSessionId === "string" ? headerSessionId : Array.isArray(headerSessionId) ? headerSessionId[0] : undefined,
+      connectionId: generateConnectionKey(request.socket.remoteAddress, request.socket.remotePort)
+    });
+    const timeout = payload.method === "initialize" ? INITIALISE_TIMEOUT_MS : undefined;
     try {
-      const result = await sendRequest(payload.method, payload.params, timeout);
+      const result = await dispatch(payload.method, payload.params, scope, timeout);
       const id = payload.id ?? null;
       response.writeHead(200, { "content-type": "application/json" });
       if (result.error) {
@@ -247,7 +243,6 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
       });
     }
   });
-
   await new Promise<void>((resolve, reject) => {
     httpServer.once("error", reject);
     httpServer.listen(opts.port, () => {
@@ -255,8 +250,7 @@ export async function startHttpBridge(server: Server, opts: { port: number }): P
       resolve();
     });
   });
-
-  console.log("ready");
+  await waitForServerReady(server);
   await context.notifier.notify("tools/list_changed", { tools: context.toolList });
   context.logger.info("server_started", { transport: "http", port: opts.port });
 }
