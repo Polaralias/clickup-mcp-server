@@ -48,6 +48,16 @@ The host will validate configuration, start the MCP server, and emit a single re
 
 Send `SIGINT` (`Ctrl+C`) or `SIGTERM` to trigger a graceful shutdown.
 
+## Transport self-check
+
+Run these probes once the HTTP bridge is listening on port 8081:
+
+```
+curl -s http://127.0.0.1:8081/healthz
+curl -s -X POST http://127.0.0.1:8081/ -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.1"}}}'
+curl -s -X POST http://127.0.0.1:8081/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
 ## Deploying with Smithery
 
 To deploy ClickUp-MCP-Server on Smithery:
