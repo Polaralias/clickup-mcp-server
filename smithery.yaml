@@ -1,9 +1,8 @@
 name: clickup-mcp-server
 version: 1.0.0
 runtime:
-  language: nodejs
-  version: "20"
-entrypoint:
+  language: container
+startCommand:
   command: ["bash", "scripts/start.sh"]
 ports:
   - "8081"
