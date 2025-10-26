@@ -16,7 +16,8 @@ import {
   withSessionScope,
   type SessionScope
 } from "../shared/config/session.js";
-import type { SessionConfig } from "../shared/config/schema.js";
+import type { SessionConfig, AppConfig } from "../shared/config/schema.js";
+import { toSessionConfig } from "../shared/config/schema.js";
 import { ClickUpGateway } from "../infrastructure/clickup/ClickUpGateway.js";
 import { buildClickUpHeaders } from "../infrastructure/clickup/headers.js";
 
@@ -105,10 +106,11 @@ function defaultSessionScope(config: SessionConfig): SessionScope {
   return { config, connectionId: "stdio" };
 }
 
-export function createServer(sessionConfig: SessionConfig): Server {
+export function createServer(config: AppConfig): Server {
   ensureGatewayPatched();
   const runtime = loadRuntimeConfig();
   configureLogging({ level: runtime.logLevel });
+  const sessionConfig = toSessionConfig(config);
   const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
   server.registerCapabilities({ tools: { listChanged: true } });
   const notifier = attachNotify(server);

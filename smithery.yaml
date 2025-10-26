@@ -1,12 +1,14 @@
-name: clickup-mcp-server
+name: clickup-mcp
 version: 1.0.0
-runtime:
-  language: container
+description: ClickUp MCP server with HTTP JSON-RPC bridge
+
+runtime: container
+
 startCommand:
-  type: stdio
+  type: http
   command: ["bash", "scripts/start.sh"]
-ports:
-  - "8081"
+  portEnv: "PORT"
+
 environment:
   required:
     - CLICKUP_TOKEN
@@ -17,6 +19,9 @@ environment:
     - CLICKUP_BASE_URL
     - DEFAULT_HEADERS_JSON
     - NODE_ENV
+  defaults:
+    NODE_ENV: production
+
 health:
   type: http
   path: /healthz

@@ -28,19 +28,19 @@ async function startStdio(server: ReturnType<typeof createServer>): Promise<void
 }
 
 process.on("SIGTERM", () => {
-  logInfo("bootstrap", "signal_received", { signal: "SIGTERM" });
+  console.log(JSON.stringify({ event: "signal", signal: "SIGTERM" }));
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
-  logInfo("bootstrap", "signal_received", { signal: "SIGINT" });
+  console.log(JSON.stringify({ event: "signal", signal: "SIGINT" }));
   process.exit(0);
 });
 
 async function main(): Promise<void> {
-  const sessionConfig = fromEnv();
+  const appConfig = fromEnv();
   try {
-    validateOrThrow(sessionConfig);
+    validateOrThrow(appConfig);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     logError("bootstrap", "config_invalid", { reason });
@@ -48,11 +48,11 @@ async function main(): Promise<void> {
     return;
   }
   logInfo("bootstrap", "startup_begin");
-  const server = createServer(sessionConfig);
+  const server = createServer(appConfig);
   const useHttp = process.env.SMITHERY_HTTP === "1" || Boolean(process.env.PORT);
   if (useHttp) {
     const port = parsePort(process.env.PORT) ?? 8081;
-    await startHttpBridge(server, sessionConfig, { port });
+    await startHttpBridge(server, port);
     console.log(JSON.stringify({ event: "ready", transport: "http", port }));
   } else {
     await startStdio(server);
