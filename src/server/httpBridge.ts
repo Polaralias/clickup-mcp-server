@@ -11,8 +11,6 @@ import {
 } from "../shared/config/session.js";
 import type { SessionConfig } from "../shared/config/schema.js";
 
-const INITIALISE_TIMEOUT_MS = 8000;
-
 const ALLOWED_METHODS = new Set(["initialize", "tools/list", "tools/call"]);
 
 type JsonRpcRequest = {
@@ -213,7 +211,8 @@ export async function startHttpBridge(
       headerSessionId: typeof headerSessionId === "string" ? headerSessionId : Array.isArray(headerSessionId) ? headerSessionId[0] : undefined,
       connectionId: generateConnectionKey(request.socket.remoteAddress, request.socket.remotePort)
     });
-    const timeout = payload.method === "initialize" ? INITIALISE_TIMEOUT_MS : undefined;
+    const timeout =
+      payload.method === "initialize" ? context.runtime.httpInitializeTimeoutMs : undefined;
     try {
       const result = await dispatch(payload.method, payload.params, scope, timeout);
       const id = payload.id ?? null;
