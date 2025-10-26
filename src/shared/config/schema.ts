@@ -11,66 +11,55 @@ export type SessionConfig = {
   defaultHeaders: Record<string, string>;
 };
 
-function toOptionalString(value: string | undefined): string | undefined {
-  if (!value) {
+export type AppConfig = {
+  apiToken: string;
+  defaultTeamId?: number;
+  primaryLanguage?: string;
+  baseUrl?: string;
+  requestTimeoutMs?: number;
+  defaultHeadersJson?: string;
+};
+
+function toOptionalString(value: string | undefined | null): string | undefined {
+  if (value === undefined || value === null) {
     return undefined;
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function parseOptionalInteger(value: string | undefined): number | undefined {
+function parseOptionalInteger(value: string | undefined | null): number | undefined {
   const raw = toOptionalString(value);
   if (!raw) {
     return undefined;
   }
   const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
   return parsed;
 }
 
-function parseDefaultHeaders(value: string | undefined): Record<string, string> {
-  const raw = toOptionalString(value);
-  if (!raw) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-    const entries: Record<string, string> = {};
-    for (const [key, entry] of Object.entries(parsed)) {
-      if (typeof entry === "string") {
-        entries[key] = entry;
-      } else if (entry !== undefined && entry !== null) {
-        entries[key] = String(entry);
+function parseHeaders(value: string | undefined, language: string | undefined): Record<string, string> {
+  const entries: Record<string, string> = {};
+  const source = toOptionalString(value);
+  if (source) {
+    try {
+      const parsed = JSON.parse(source) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        for (const [key, entry] of Object.entries(parsed)) {
+          if (typeof entry === "string") {
+            entries[key] = entry;
+          } else if (entry !== undefined && entry !== null) {
+            entries[key] = String(entry);
+          }
+        }
       }
+    } catch {
+      return entries;
     }
-    return entries;
-  } catch {
-    return {};
   }
-}
-
-function resolveAuthScheme(value: string | undefined): AuthScheme {
-  if (value === "oauth" || value === "personal_token" || value === "auto") {
-    return value;
+  if (language && !entries["Accept-Language"]) {
+    entries["Accept-Language"] = language;
   }
-  return "auto";
-}
-
-function parseTimeoutSeconds(value: string | undefined): number {
-  const parsed = parseOptionalInteger(value);
-  if (parsed === undefined) {
-    return 30;
-  }
-  if (parsed <= 0) {
-    return 30;
-  }
-  return Math.ceil(parsed / 1000);
+  return entries;
 }
 
 export function normaliseBaseUrl(value: string | undefined): string {
@@ -102,29 +91,51 @@ export function normaliseBaseUrl(value: string | undefined): string {
   return url.toString().replace(/\/+$/, "");
 }
 
-export function fromEnv(): SessionConfig {
-  const apiToken = toOptionalString(process.env.CLICKUP_TOKEN) ?? "";
-  const authScheme = resolveAuthScheme(process.env.CLICKUP_AUTH_SCHEME);
-  const baseUrl = normaliseBaseUrl(process.env.CLICKUP_BASE_URL);
-  const defaultTeamId = parseOptionalInteger(process.env.CLICKUP_DEFAULT_TEAM_ID);
-  const requestTimeout = parseTimeoutSeconds(process.env.REQUEST_TIMEOUT_MS);
-  const defaultHeaders = parseDefaultHeaders(process.env.DEFAULT_HEADERS_JSON);
-  const language = toOptionalString(process.env.CLICKUP_PRIMARY_LANGUAGE);
-  if (language && !defaultHeaders["Accept-Language"]) {
-    defaultHeaders["Accept-Language"] = language;
+function resolveRequestTimeout(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+    return 30;
   }
+  return Math.ceil(value / 1000);
+}
+
+export function fromEnv(): AppConfig {
+  const apiToken = toOptionalString(process.env.CLICKUP_TOKEN) ?? "";
+  const defaultTeamId = parseOptionalInteger(process.env.CLICKUP_DEFAULT_TEAM_ID ?? undefined);
+  const primaryLanguage = toOptionalString(process.env.CLICKUP_PRIMARY_LANGUAGE);
+  const baseUrl = toOptionalString(process.env.CLICKUP_BASE_URL);
+  const requestTimeoutMs = parseOptionalInteger(process.env.REQUEST_TIMEOUT_MS ?? undefined);
+  const defaultHeadersJson = toOptionalString(process.env.DEFAULT_HEADERS_JSON);
   return {
     apiToken,
-    authScheme,
-    baseUrl,
     defaultTeamId,
-    requestTimeout,
-    defaultHeaders
+    primaryLanguage,
+    baseUrl,
+    requestTimeoutMs,
+    defaultHeadersJson
   };
 }
 
-export function validateOrThrow(config: SessionConfig): void {
-  if (!config.apiToken) {
+export function validateOrThrow(config: AppConfig): void {
+  if (!config.apiToken || config.apiToken.trim().length === 0) {
     throw new Error("Missing ClickUp API token");
   }
+  if (config.defaultTeamId !== undefined && !Number.isFinite(config.defaultTeamId)) {
+    throw new Error("Invalid ClickUp default team id");
+  }
+}
+
+export function toSessionConfig(config: AppConfig): SessionConfig {
+  const baseUrl = normaliseBaseUrl(config.baseUrl);
+  const requestTimeout = resolveRequestTimeout(config.requestTimeoutMs);
+  const defaultHeaders = parseHeaders(config.defaultHeadersJson, config.primaryLanguage);
+  return {
+    apiToken: config.apiToken,
+    authScheme: "auto",
+    baseUrl,
+    defaultTeamId: Number.isFinite(config.defaultTeamId ?? NaN)
+      ? config.defaultTeamId
+      : undefined,
+    requestTimeout,
+    defaultHeaders
+  };
 }
