@@ -13,6 +13,14 @@ export function createServerFromSmithery(
     ...process.env,
     ...(context?.env ?? {})
   };
+  if (context?.env) {
+    for (const [key, value] of Object.entries(context.env)) {
+      if (value === undefined) {
+        continue;
+      }
+      process.env[key] = value;
+    }
+  }
   const config = fromEnv(combinedEnv);
   validateOrThrow(config);
   return createServer(config);
