@@ -54,6 +54,37 @@ export type SmitheryCommandContext = {
   auth?: unknown;
 };
 
+function extractAuthValue(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (value && typeof value === "object") {
+    const candidate = value as Record<string, unknown>;
+    const direct = candidate.value ?? candidate.secret ?? candidate.raw;
+    if (typeof direct === "string") {
+      return direct;
+    }
+  }
+  return undefined;
+}
+
+function normaliseAuthSource(auth: unknown): Record<string, string | undefined> {
+  if (!auth || typeof auth !== "object") {
+    return {};
+  }
+  const entries: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(auth as Record<string, unknown>)) {
+    const resolved = extractAuthValue(value);
+    if (resolved !== undefined) {
+      entries[key] = resolved;
+    }
+  }
+  return entries;
+}
+
 function mergeAppConfig(base: AppConfig, overrides: SmitheryConfig | undefined): AppConfig {
   if (!overrides) {
     return base;
@@ -111,7 +142,8 @@ export default function createServer(
 ): Server {
   const envSource: Record<string, string | undefined> = {
     ...process.env,
-    ...(context?.env ?? {})
+    ...(context?.env ?? {}),
+    ...normaliseAuthSource(context?.auth)
   };
   const baseConfig = fromEnv(envSource);
   const overrides = context?.config
