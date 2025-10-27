@@ -93,3 +93,11 @@ Smithery's TypeScript runtime can instantiate the MCP server directly from the e
    ```
 
 Smithery will call the factory, connect over stdio, and emit tool metadata once the server is ready.
+
+## Smithery TS runtime
+
+Smithery loads the MCP server by invoking `createServer` from `src/server/factory.ts` inside the TypeScript runtime. The runtime initialises the server without starting transports, allowing Smithery to manage connectivity.
+
+The Smithery configuration UI maps to the runtime config: provide an `apiToken` value and optionally set `defaultTeamId`. Additional fields remain optional and fall back to environment defaults.
+
+Environment variables such as `CLICKUP_TOKEN`, `CLICKUP_DEFAULT_TEAM_ID`, and related ClickUp settings act as defaults for the Smithery form. Updating the UI overrides those defaults for the active session.

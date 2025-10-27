@@ -1,40 +1,21 @@
 name: clickup-mcp
 version: 1.0.0
-description: ClickUp MCP server using the Smithery TypeScript runtime
+description: ClickUp MCP server
 
 runtime: typescript
 
 startCommand:
-  commandFunction:
-    file: src/server/smithery.ts
-    export: createServerFromSmithery
+  commandFunction: "src/server/factory.ts:createServer"
 
 environment:
-  required:
-    - CLICKUP_TOKEN
   optional:
+    - CLICKUP_TOKEN
     - CLICKUP_DEFAULT_TEAM_ID
     - CLICKUP_PRIMARY_LANGUAGE
-    - CLICKUP_BASE_URL
     - REQUEST_TIMEOUT_MS
+    - CLICKUP_BASE_URL
     - DEFAULT_HEADERS_JSON
-    - CLICKUP_AUTH_SCHEME
     - NODE_ENV
-    - LOG_LEVEL
-    - MCP_TRANSPORT
-    - MCP_HTTP_PORT
-    - MCP_HTTP_HOST
-    - MCP_HTTP_CORS_ALLOW_ORIGIN
-    - MCP_HTTP_CORS_ALLOW_HEADERS
-    - MCP_HTTP_CORS_ALLOW_METHODS
-    - MCP_HTTP_ENABLE_JSON_RESPONSE
-    - MCP_HTTP_ALLOWED_HOSTS
-    - MCP_HTTP_ALLOWED_ORIGINS
-    - MCP_HTTP_ENABLE_DNS_REBINDING_PROTECTION
-    - MCP_HTTP_INITIALIZE_TIMEOUT_MS
-    - FEATURE_PERSISTENCE
-    - MAX_ATTACHMENT_MB
-    - MAX_BULK_CONCURRENCY
   defaults:
     NODE_ENV: production
 

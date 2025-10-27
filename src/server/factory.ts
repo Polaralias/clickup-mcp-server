@@ -1,5 +1,11 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  InitializeRequestSchema,
+  ListToolsRequestSchema,
+  McpError
+} from "@modelcontextprotocol/sdk/types.js";
 import { loadRuntimeConfig, type RuntimeConfig } from "../config/runtime.js";
 import { PROJECT_NAME } from "../config/constants.js";
 import { registerTools, type RegisteredTool } from "../mcp/tools/registerTools.js";
@@ -16,10 +22,14 @@ import {
   withSessionScope,
   type SessionScope
 } from "../shared/config/session.js";
-import type { SessionConfig, AppConfig } from "../shared/config/schema.js";
-import { toSessionConfig } from "../shared/config/schema.js";
+import {
+  toSessionConfig,
+  type AppConfig as SchemaAppConfig,
+  type SessionConfig
+} from "../shared/config/schema.js";
 import { ClickUpGateway } from "../infrastructure/clickup/ClickUpGateway.js";
 import { buildClickUpHeaders } from "../infrastructure/clickup/headers.js";
+import { mergeConfig, validateConfig, type AppConfig } from "../shared/config/smithery.js";
 
 const serverContextSymbol = Symbol.for("clickup.mcp.serverContext");
 
@@ -46,14 +56,6 @@ type ServerContext = {
   ready: Promise<void>;
 };
 
-export type CreateServerOptions = {
-  /**
-   * Connection identifier applied to implicit session scopes (e.g. stdio transport).
-   * Defaults to "stdio" for backwards compatibility.
-   */
-  defaultConnectionId?: string;
-};
-
 function ensureGatewayPatched(): void {
   if (gatewayPatched) {
     return;
@@ -63,10 +65,10 @@ function ensureGatewayPatched(): void {
     authHeader?: () => Record<string, string>;
   };
   const original = prototype.authHeader;
-  prototype.authHeader = function overrideAuthHeader(this: any): Record<string, string> {
+  prototype.authHeader = function overrideAuthHeader(this: unknown): Record<string, string> {
     try {
       const session = getSessionConfig();
-      const teamId = this?.cfg?.defaultTeamId;
+      const teamId = (this as { cfg?: { defaultTeamId?: number } })?.cfg?.defaultTeamId;
       return buildClickUpHeaders({ session, teamId });
     } catch (error) {
       if (typeof original === "function") {
@@ -115,14 +117,37 @@ function buildSessionScope(config: SessionConfig, connectionId: string): Session
   return { config, connectionId };
 }
 
-export function createServer(config: AppConfig, options?: CreateServerOptions): Server {
+function toSchemaConfig(cfg: AppConfig): SchemaAppConfig {
+  return {
+    apiToken: cfg.apiToken ?? "",
+    defaultTeamId: cfg.defaultTeamId,
+    primaryLanguage: cfg.primaryLanguage,
+    baseUrl: cfg.baseUrl,
+    requestTimeoutMs: cfg.requestTimeoutMs,
+    defaultHeadersJson: cfg.defaultHeadersJson
+  };
+}
+
+export async function createServer(input?: Partial<AppConfig>): Promise<Server> {
   ensureGatewayPatched();
+  const resolved = mergeConfig(input ?? {});
+  const validation = validateConfig(resolved);
   const runtime = loadRuntimeConfig();
   configureLogging({ level: runtime.logLevel });
-  const sessionConfig = toSessionConfig(config);
-  const defaultConnectionId = options?.defaultConnectionId ?? "stdio";
   const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
   server.registerCapabilities({ tools: { listChanged: true } });
+  if (!validation.ok) {
+    server.setRequestHandler(InitializeRequestSchema, () => {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing apiToken. Provide in Smithery config UI or set CLICKUP_TOKEN."
+      );
+    });
+    return server;
+  }
+  const schemaConfig = toSchemaConfig(resolved);
+  const sessionConfig = toSessionConfig(schemaConfig);
+  const defaultConnectionId = "smithery";
   const notifier = attachNotify(server);
   const logger = createLogger("mcp.server");
   const context: ServerContext = {

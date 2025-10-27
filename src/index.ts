@@ -144,9 +144,9 @@ async function startHost(): Promise<void> {
 
 export const configSchema = smitheryConfigSchema;
 
-export default function createServer(
+export default async function createServer(
   context?: SmitheryCommandContext
-): Server {
+): Promise<Server> {
   const envSource: Record<string, string | undefined> = {
     ...process.env,
     ...(context?.env ?? {}),
