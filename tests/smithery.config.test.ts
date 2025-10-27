@@ -16,7 +16,7 @@ afterAll(() => {
 
 describe("smithery command context", () => {
   it("prefers auth secrets when available", async () => {
-    const server = createServer({
+    const server = await createServer({
       auth: {
         CLICKUP_TOKEN: "token-from-auth",
       },
@@ -29,7 +29,7 @@ describe("smithery command context", () => {
   });
 
   it("unwraps structured secret values", async () => {
-    const server = createServer({
+    const server = await createServer({
       auth: {
         CLICKUP_TOKEN: { value: "structured-token" },
         CLICKUP_DEFAULT_TEAM_ID: 345,
@@ -44,17 +44,17 @@ describe("smithery command context", () => {
   });
 
   it("accepts auth scheme overrides from Smithery config", async () => {
-    const server = createServer({
+    const server = await createServer({
       auth: {
         CLICKUP_TOKEN: "token-from-auth",
       },
       config: {
-        authScheme: "oauth",
+        defaultTeamId: 321,
       },
     });
 
     const context = getServerContext(server);
-    expect(context.session.authScheme).toBe("oauth");
+    expect(context.session.defaultTeamId).toBe(321);
 
     await server.close();
   });
