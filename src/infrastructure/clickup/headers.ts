@@ -1,4 +1,4 @@
-import { SessionConfig } from "../../shared/config/schema.js";
+import { SessionConfig, AuthScheme } from "../../shared/config/schema.js";
 import { getSessionId, getConnectionId, stableSessionIdentifier } from "../../shared/config/session.js";
 
 const MAX_CACHE_SIZE = 256;
@@ -32,17 +32,38 @@ function resolveClientSessionId(): string {
   return cacheConnectionIdentifier(connectionId);
 }
 
-function resolveAuthHeader(config: SessionConfig): string {
-  if (config.authScheme === "oauth") {
-    return `Bearer ${config.apiToken}`;
+const BEARER_PREFIX = /^bearer\s+/i;
+
+function isLikelyJwt(token: string): boolean {
+  const segments = token.split(".");
+  if (segments.length !== 3) {
+    return false;
   }
-  if (config.authScheme === "personal_token") {
-    return config.apiToken;
+  return segments.every(part => part.length > 0);
+}
+
+export function resolveAuthorizationValue(token: string, scheme: AuthScheme): string {
+  const raw = token.trim();
+  if (raw.length === 0) {
+    return raw;
   }
-  if (config.apiToken.includes(".") || config.apiToken.length > 40) {
-    return `Bearer ${config.apiToken}`;
+  if (BEARER_PREFIX.test(raw)) {
+    return raw;
   }
-  return config.apiToken;
+  if (scheme === "oauth") {
+    return `Bearer ${raw}`;
+  }
+  if (scheme === "personal_token") {
+    return raw;
+  }
+  if (isLikelyJwt(raw)) {
+    return `Bearer ${raw}`;
+  }
+  return raw;
+}
+
+export function resolveAuthHeader(config: SessionConfig): string {
+  return resolveAuthorizationValue(config.apiToken, config.authScheme);
 }
 
 export function buildClickUpHeaders(options: { session: SessionConfig; teamId?: number }): Record<string, string> {

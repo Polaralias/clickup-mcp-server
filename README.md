@@ -67,6 +67,7 @@ To deploy ClickUp-MCP-Server on Smithery:
    - `CLICKUP_TOKEN`
    - `CLICKUP_DEFAULT_TEAM_ID`
 3. Optional tuning:
+   - `CLICKUP_AUTH_SCHEME` (override auth detection to `auto`, `personal_token`, or `oauth`)
    - `MAX_ATTACHMENT_MB` (default 8)
    - `MAX_BULK_CONCURRENCY` (default 10)
    - `CHARACTER_LIMIT` (default 25000)
@@ -84,6 +85,7 @@ Smithery's TypeScript runtime can instantiate the MCP server directly from the e
 
 1. Create or update `smithery.yaml` so it uses the TypeScript runtime and points `startCommand.commandFunction` at `src/server/smithery.ts#createServerFromSmithery`.
 2. Provide the required `CLICKUP_TOKEN` secret along with any optional ClickUp configuration variables (team ID, base URL, timeouts, custom headers, etc.).
+   - Set `CLICKUP_AUTH_SCHEME` if the automatic token detection should be overridden (`auto`, `personal_token`, `oauth`).
 3. Configure optional runtime tuning variables as needed (for example `LOG_LEVEL`, `FEATURE_PERSISTENCE`, `MCP_HTTP_*`, `MAX_ATTACHMENT_MB`, or `MAX_BULK_CONCURRENCY`).
 4. Deploy with:
    ```bash

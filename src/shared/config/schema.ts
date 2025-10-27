@@ -18,6 +18,7 @@ export type AppConfig = {
   baseUrl?: string;
   requestTimeoutMs?: number;
   defaultHeadersJson?: string;
+  authScheme?: AuthScheme;
 };
 
 function toOptionalString(value: string | undefined | null): string | undefined {
@@ -35,6 +36,20 @@ function parseOptionalInteger(value: string | undefined | null): number | undefi
   }
   const parsed = Number.parseInt(raw, 10);
   return parsed;
+}
+
+const AUTH_SCHEMES: AuthScheme[] = ["auto", "personal_token", "oauth"];
+
+function parseAuthSchemeValue(value: string | undefined | null): AuthScheme | undefined {
+  const raw = toOptionalString(value);
+  if (!raw) {
+    return undefined;
+  }
+  const normalised = raw.toLowerCase();
+  if ((AUTH_SCHEMES as string[]).includes(normalised)) {
+    return normalised as AuthScheme;
+  }
+  return undefined;
 }
 
 function parseHeaders(value: string | undefined, language: string | undefined): Record<string, string> {
@@ -116,13 +131,15 @@ export function fromEnv(env?: EnvSource): AppConfig {
   const baseUrl = toOptionalString(readEnv(source, "CLICKUP_BASE_URL"));
   const requestTimeoutMs = parseOptionalInteger(readEnv(source, "REQUEST_TIMEOUT_MS"));
   const defaultHeadersJson = toOptionalString(readEnv(source, "DEFAULT_HEADERS_JSON"));
+  const authScheme = parseAuthSchemeValue(readEnv(source, "CLICKUP_AUTH_SCHEME"));
   return {
     apiToken,
     defaultTeamId,
     primaryLanguage,
     baseUrl,
     requestTimeoutMs,
-    defaultHeadersJson
+    defaultHeadersJson,
+    authScheme
   };
 }
 
@@ -141,7 +158,7 @@ export function toSessionConfig(config: AppConfig): SessionConfig {
   const defaultHeaders = parseHeaders(config.defaultHeadersJson, config.primaryLanguage);
   return {
     apiToken: config.apiToken,
-    authScheme: "auto",
+    authScheme: config.authScheme ?? "auto",
     baseUrl,
     defaultTeamId: Number.isFinite(config.defaultTeamId ?? NaN)
       ? config.defaultTeamId

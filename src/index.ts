@@ -42,6 +42,10 @@ const smitheryConfigSchema = z
       .string()
       .min(1)
       .describe("JSON payload containing additional headers for ClickUp requests")
+      .optional(),
+    authScheme: z
+      .enum(["auto", "personal_token", "oauth"])
+      .describe("Authentication scheme to use when authorising ClickUp requests")
       .optional()
   })
   .strict();
@@ -107,6 +111,9 @@ function mergeAppConfig(base: AppConfig, overrides: SmitheryConfig | undefined):
   }
   if (overrides.defaultHeadersJson) {
     merged.defaultHeadersJson = overrides.defaultHeadersJson;
+  }
+  if (overrides.authScheme) {
+    merged.authScheme = overrides.authScheme;
   }
   return merged;
 }

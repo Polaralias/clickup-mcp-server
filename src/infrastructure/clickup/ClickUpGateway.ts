@@ -1,6 +1,7 @@
 import { ApiCache } from "../cache/ApiCache.js";
 import { HttpClient } from "../http/HttpClient.js";
 import { createLogger } from "../../shared/logging.js";
+import { resolveAuthorizationValue } from "./headers.js";
 
 export type AuthScheme = "auto" | "oauth" | "personal_token";
 
@@ -34,17 +35,8 @@ export class ClickUpGateway {
   }
 
   private authHeader(): Record<string, string> {
-    if (this.cfg.authScheme === "oauth") {
-      return { Authorization: `Bearer ${this.cfg.token}` };
-    }
-    if (this.cfg.authScheme === "personal_token") {
-      return { Authorization: this.cfg.token };
-    }
-    const token = this.cfg.token;
-    if (token.includes(".") || token.length > 40) {
-      return { Authorization: `Bearer ${token}` };
-    }
-    return { Authorization: token };
+    const Authorization = resolveAuthorizationValue(this.cfg.token, this.cfg.authScheme);
+    return { Authorization };
   }
 
   private buildUrl(path: string): string {
