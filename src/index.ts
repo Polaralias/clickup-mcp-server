@@ -1,3 +1,4 @@
+import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { z } from "zod";
@@ -133,7 +134,7 @@ function resolveInvocationHref(): string | undefined {
   if (target.startsWith("file://")) {
     return target;
   }
-  if (target.startsWith("/")) {
+  if (isAbsolute(target)) {
     return pathToFileURL(target).href;
   }
   const base = pathToFileURL(`${process.cwd()}/`).href;
