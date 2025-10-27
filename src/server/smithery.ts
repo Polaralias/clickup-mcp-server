@@ -1,19 +1,16 @@
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { createServer } from "./factory.js";
-import { fromEnv, validateOrThrow } from "../shared/config/schema.js";
+import createServer, {
+  configSchema,
+  type SmitheryCommandContext
+} from "../index.js";
 
-type SmitheryCommandContext = {
-  env?: Record<string, string | undefined>;
-};
+export { configSchema };
+export type { SmitheryCommandContext };
 
 export function createServerFromSmithery(
-  context: SmitheryCommandContext | undefined
+  context?: SmitheryCommandContext
 ): Server {
-  const combinedEnv: Record<string, string | undefined> = {
-    ...process.env,
-    ...(context?.env ?? {})
-  };
-  const config = fromEnv(combinedEnv);
-  validateOrThrow(config);
-  return createServer(config);
+  return createServer(context);
 }
+
+export default createServer;
