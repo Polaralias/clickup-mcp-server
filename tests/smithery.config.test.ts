@@ -42,4 +42,20 @@ describe("smithery command context", () => {
 
     await server.close();
   });
+
+  it("accepts auth scheme overrides from Smithery config", async () => {
+    const server = createServer({
+      auth: {
+        CLICKUP_TOKEN: "token-from-auth",
+      },
+      config: {
+        authScheme: "oauth",
+      },
+    });
+
+    const context = getServerContext(server);
+    expect(context.session.authScheme).toBe("oauth");
+
+    await server.close();
+  });
 });

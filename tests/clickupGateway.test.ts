@@ -84,4 +84,44 @@ describe("ClickUpGateway", () => {
     expect(calls.length).toBe(1);
     expect(calls[0].headers?.Authorization).toBe("tok123");
   });
+
+  it("does not incorrectly prefix Bearer for long personal tokens", async () => {
+    const kv = makeMemoryKV();
+    const cache = new ApiCache(kv);
+    const calls: HttpRequest[] = [];
+    const client = new HttpClient({
+      baseUrl: config.baseUrl,
+      transport: async request => {
+        calls.push(request);
+        const response: HttpResponse = { status: 200, headers: {}, data: { id: "task" } };
+        return response;
+      }
+    });
+    const personalToken = "pk_abcdefghijklmnopqrstuvwxyz0123456789TOKEN";
+    const autoConfig: ClickUpGatewayConfig = { ...config, authScheme: "auto", token: personalToken };
+    const gateway = new ClickUpGateway(client, cache, autoConfig);
+    await gateway.get_task_by_id("task123");
+    expect(calls.length).toBe(1);
+    expect(calls[0].headers?.Authorization).toBe(personalToken);
+  });
+
+  it("prefers Bearer for JWT-style tokens when auto-detected", async () => {
+    const kv = makeMemoryKV();
+    const cache = new ApiCache(kv);
+    const calls: HttpRequest[] = [];
+    const client = new HttpClient({
+      baseUrl: config.baseUrl,
+      transport: async request => {
+        calls.push(request);
+        const response: HttpResponse = { status: 200, headers: {}, data: { id: "task" } };
+        return response;
+      }
+    });
+    const jwtToken = "aaa.bbb.ccc";
+    const autoConfig: ClickUpGatewayConfig = { ...config, authScheme: "auto", token: jwtToken };
+    const gateway = new ClickUpGateway(client, cache, autoConfig);
+    await gateway.get_task_by_id("task123");
+    expect(calls.length).toBe(1);
+    expect(calls[0].headers?.Authorization).toBe(`Bearer ${jwtToken}`);
+  });
 });
