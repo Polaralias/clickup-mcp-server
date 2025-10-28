@@ -2,7 +2,6 @@
 
 ## 2025-10-28
 - Pointed the Smithery start command at `src/server/smithery.ts:createServerFromSmithery` so configuration and auth schemas load correctly in the UI.
-- Attached the Smithery configuration schema to the exported TypeScript entry point so the runtime UI can discover auth fields.
 
 ## 2025-10-26
 - Updated the Smithery deployment configuration to use the container runtime with the explicit start command to satisfy schema validation.
