@@ -5,7 +5,7 @@ description: ClickUp MCP server
 runtime: typescript
 
 startCommand:
-  commandFunction: "src/server/factory.ts:createServer"
+  commandFunction: "src/server/smithery.ts:createServerFromSmithery"
 
 environment:
   optional:
