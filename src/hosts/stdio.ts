@@ -15,7 +15,7 @@ async function start(): Promise<void> {
   }
 
   logInfo("bootstrap", "stdio_startup_begin");
-  const server = createServer(config, { defaultConnectionId: "stdio" });
+  const server = await createServer(config, { defaultConnectionId: "stdio" });
   const transport = new StdioServerTransport();
 
   transport.onerror = error => {

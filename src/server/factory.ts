@@ -124,11 +124,15 @@ function toSchemaConfig(cfg: AppConfig): SchemaAppConfig {
     primaryLanguage: cfg.primaryLanguage,
     baseUrl: cfg.baseUrl,
     requestTimeoutMs: cfg.requestTimeoutMs,
-    defaultHeadersJson: cfg.defaultHeadersJson
+    defaultHeadersJson: cfg.defaultHeadersJson,
+    authScheme: cfg.authScheme
   };
 }
 
-export async function createServer(input?: Partial<AppConfig>): Promise<Server> {
+export async function createServer(
+  input?: Partial<AppConfig>,
+  options?: { defaultConnectionId?: string }
+): Promise<Server> {
   ensureGatewayPatched();
   const resolved = mergeConfig(input ?? {});
   const validation = validateConfig(resolved);
@@ -147,7 +151,7 @@ export async function createServer(input?: Partial<AppConfig>): Promise<Server> 
   }
   const schemaConfig = toSchemaConfig(resolved);
   const sessionConfig = toSessionConfig(schemaConfig);
-  const defaultConnectionId = "smithery";
+  const defaultConnectionId = options?.defaultConnectionId ?? "smithery";
   const notifier = attachNotify(server);
   const logger = createLogger("mcp.server");
   const context: ServerContext = {
