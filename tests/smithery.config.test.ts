@@ -1,5 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import createServer from "../src/index.js";
+import {
+  createServerFromSmithery,
+  configSchema as smitheryConfigSchema
+} from "../src/server/smithery.js";
 import { getServerContext } from "../src/server/factory.js";
 
 const ORIGINAL_ENV = { ...process.env };
@@ -57,5 +61,9 @@ describe("smithery command context", () => {
     expect(context.session.defaultTeamId).toBe(321);
 
     await server.close();
+  });
+
+  it("exposes the configuration schema on the Smithery entry point", () => {
+    expect(createServerFromSmithery.configSchema).toBe(smitheryConfigSchema);
   });
 });
