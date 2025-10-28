@@ -9,7 +9,7 @@ export type { SmitheryCommandContext };
 
 export function createServerFromSmithery(
   context?: SmitheryCommandContext
-): Server {
+): Promise<Server> {
   return createServer(context);
 }
 

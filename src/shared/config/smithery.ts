@@ -1,4 +1,8 @@
-import { fromEnv as loadAppConfig, type AppConfig as LegacyAppConfig } from "./schema.js";
+import {
+  fromEnv as loadAppConfig,
+  type AppConfig as LegacyAppConfig,
+  type AuthScheme
+} from "./schema.js";
 
 export type AppConfig = {
   apiToken?: string;
@@ -7,6 +11,7 @@ export type AppConfig = {
   baseUrl?: string;
   requestTimeoutMs?: number;
   defaultHeadersJson?: string;
+  authScheme?: AuthScheme;
 };
 
 function toOptionalString(value: unknown): string | undefined {
@@ -53,6 +58,9 @@ function fromLegacy(config: LegacyAppConfig): AppConfig {
   if (defaultHeadersJson) {
     result.defaultHeadersJson = defaultHeadersJson;
   }
+  if (config.authScheme) {
+    result.authScheme = config.authScheme;
+  }
   return result;
 }
 
@@ -82,6 +90,9 @@ export function mergeConfig(input: Partial<AppConfig>): AppConfig {
   const defaultHeadersJson = toOptionalString(input.defaultHeadersJson);
   if (defaultHeadersJson !== undefined) {
     merged.defaultHeadersJson = defaultHeadersJson;
+  }
+  if (input.authScheme !== undefined) {
+    merged.authScheme = input.authScheme;
   }
   return merged;
 }
