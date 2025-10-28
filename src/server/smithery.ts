@@ -1,4 +1,3 @@
-import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import createServer, {
   configSchema,
   type SmitheryCommandContext
@@ -7,10 +6,21 @@ import createServer, {
 export { configSchema };
 export type { SmitheryCommandContext };
 
-export function createServerFromSmithery(
+type SmitheryEntryPoint = ((
   context?: SmitheryCommandContext
-): Server {
-  return createServer(context);
-}
+) => ReturnType<typeof createServer>) & {
+  configSchema: typeof configSchema;
+};
 
-export default createServer;
+const createServerFromSmithery: SmitheryEntryPoint = Object.assign(
+  async (context?: SmitheryCommandContext) => createServer(context),
+  { configSchema }
+);
+
+const createServerWithSchema: SmitheryEntryPoint = Object.assign(createServer, {
+  configSchema
+});
+
+export { createServerFromSmithery };
+
+export default createServerWithSchema;
