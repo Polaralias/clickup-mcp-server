@@ -14,6 +14,7 @@ import { CommentTask } from "../src/application/usecases/tasks/CommentTask.js";
 import { AttachFileToTask } from "../src/application/usecases/tasks/AttachFileToTask.js";
 import { AddTagsToTask, RemoveTagsFromTask } from "../src/application/usecases/tasks/Tags.js";
 import { registerTools } from "../src/mcp/tools/registerTools.js";
+import { createTestSession } from "./helpers/session.js";
 
 type CreateGatewayStub = Pick<ClickUpGateway, "create_task">;
 type MoveGatewayStub = Pick<ClickUpGateway, "move_task">;
@@ -193,7 +194,7 @@ describe("Task CRUD usecases", () => {
     const server = {} as McpServer;
     const cache = new ApiCache(makeMemoryKV());
     const registerGateway = buildGatewayStub();
-    const tools = await registerTools(server, runtime, {
+    const tools = await registerTools(server, runtime, createTestSession(), {
       gateway: registerGateway as unknown as ClickUpGateway,
       cache
     });

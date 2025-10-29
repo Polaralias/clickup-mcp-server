@@ -6,6 +6,7 @@ import type { RuntimeConfig } from "../src/config/runtime.js";
 import { ApiCache } from "../src/infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../src/shared/KV.js";
 import type { ClickUpGateway } from "../src/infrastructure/clickup/ClickUpGateway.js";
+import { createTestSession } from "./helpers/session.js";
 
 type ToolName = "clickup_delete_task" | "clickup_delete_time_entry";
 
@@ -24,7 +25,7 @@ async function resolveTool(name: ToolName, gateway: GatewayStub) {
   };
   const server = {} as McpServer;
   const cache = new ApiCache(makeMemoryKV());
-  const tools = await registerTools(server, runtime, {
+  const tools = await registerTools(server, runtime, createTestSession(), {
     gateway: gateway as unknown as ClickUpGateway,
     cache
   });

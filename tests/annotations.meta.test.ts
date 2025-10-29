@@ -6,6 +6,7 @@ import type { RuntimeConfig } from "../src/config/runtime.js";
 import type { ClickUpGateway } from "../src/infrastructure/clickup/ClickUpGateway.js";
 import { ApiCache } from "../src/infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../src/shared/KV.js";
+import { createTestSession } from "./helpers/session.js";
 
 describe("Tool annotations", () => {
   it("enforce mutation and deletion metadata policies", async () => {
@@ -19,7 +20,7 @@ describe("Tool annotations", () => {
     const cache = new ApiCache(makeMemoryKV());
     const gateway = {} as ClickUpGateway;
 
-    const tools = await registerTools(server, runtime, { gateway, cache });
+    const tools = await registerTools(server, runtime, createTestSession(), { gateway, cache });
 
     const lookup = (name: string) => {
       const tool = tools.find(entry => entry.name === name);

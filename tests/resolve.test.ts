@@ -6,6 +6,7 @@ import { ApiCache } from "../src/infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../src/shared/KV.js";
 import type { ClickUpGateway } from "../src/infrastructure/clickup/ClickUpGateway.js";
 import { registerTools } from "../src/mcp/tools/registerTools.js";
+import { createTestSession } from "./helpers/session.js";
 
 type GatewayStub = Pick<
   ClickUpGateway,
@@ -83,7 +84,10 @@ describe("resolve tools", () => {
       }
     });
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, createTestSession(), {
+      gateway: gateway as unknown as ClickUpGateway,
+      cache
+    });
     const tool = tools.find(entry => entry.name === "clickup_resolve_path_to_ids");
     if (!tool) {
       throw new Error("Tool not found");
@@ -112,7 +116,10 @@ describe("resolve tools", () => {
       }
     });
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, createTestSession(), {
+      gateway: gateway as unknown as ClickUpGateway,
+      cache
+    });
     const tool = tools.find(entry => entry.name === "clickup_resolve_path_to_ids");
     if (!tool) {
       throw new Error("Tool not found");
@@ -147,7 +154,10 @@ describe("resolve tools", () => {
       }
     });
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, createTestSession(), {
+      gateway: gateway as unknown as ClickUpGateway,
+      cache
+    });
     const tool = tools.find(entry => entry.name === "clickup_resolve_path_to_ids");
     if (!tool) {
       throw new Error("Tool not found");

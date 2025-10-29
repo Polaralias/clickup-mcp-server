@@ -10,6 +10,7 @@ import type { HttpTransportConfig, RuntimeConfig } from "../config/runtime.js";
 import { PROJECT_NAME } from "../config/constants.js";
 import { registerTools, RegisteredTool } from "./tools/registerTools.js";
 import { PACKAGE_VERSION } from "../shared/version.js";
+import { fromEnv, toSessionConfig, validateOrThrow } from "../shared/config/schema.js";
 
 type ToolListEntry = {
   name: string;
@@ -133,10 +134,13 @@ async function startStdioServer(
 }
 
 export async function startServer(runtime: RuntimeConfig): Promise<void> {
+  const envConfig = fromEnv();
+  validateOrThrow(envConfig);
+  const session = toSessionConfig(envConfig);
   const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
   server.registerCapabilities({ tools: { listChanged: true } });
   const notifyingServer = attachNotify(server);
-  const tools = await registerTools(server, runtime);
+  const tools = await registerTools(server, runtime, session);
   const toolMap = new Map<string, RegisteredTool>(tools.map(tool => [tool.name, tool]));
   const logger = createLogger("mcp.server");
 
