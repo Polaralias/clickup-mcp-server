@@ -19,6 +19,8 @@ export type AppConfig = {
   requestTimeoutMs?: number;
   defaultHeadersJson?: string;
   authScheme?: AuthScheme;
+  toolAllowList?: string[];
+  toolDenyList?: string[];
 };
 
 function toOptionalString(value: string | undefined | null): string | undefined {
@@ -123,6 +125,26 @@ function readEnv(env: EnvSource, key: string): string | undefined {
   return env[key];
 }
 
+function parseToolList(value: string | undefined): string[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const entries = value
+    .split(/[\s,]+/)
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  const unique = new Set<string>();
+  for (const entry of entries) {
+    if (!unique.has(entry)) {
+      unique.add(entry);
+    }
+  }
+  return Array.from(unique);
+}
+
 export function fromEnv(env?: EnvSource): AppConfig {
   const source = resolveEnv(env);
   const apiToken = toOptionalString(readEnv(source, "CLICKUP_TOKEN")) ?? "";
@@ -132,6 +154,8 @@ export function fromEnv(env?: EnvSource): AppConfig {
   const requestTimeoutMs = parseOptionalInteger(readEnv(source, "REQUEST_TIMEOUT_MS"));
   const defaultHeadersJson = toOptionalString(readEnv(source, "DEFAULT_HEADERS_JSON"));
   const authScheme = parseAuthSchemeValue(readEnv(source, "CLICKUP_AUTH_SCHEME"));
+  const toolAllowList = parseToolList(readEnv(source, "MCP_TOOLS_ALLOW"));
+  const toolDenyList = parseToolList(readEnv(source, "MCP_TOOLS_DENY"));
   return {
     apiToken,
     defaultTeamId,
@@ -139,7 +163,9 @@ export function fromEnv(env?: EnvSource): AppConfig {
     baseUrl,
     requestTimeoutMs,
     defaultHeadersJson,
-    authScheme
+    authScheme,
+    toolAllowList,
+    toolDenyList
   };
 }
 
