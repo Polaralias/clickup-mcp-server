@@ -91,8 +91,7 @@ import { ApiCache } from "../../infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../../shared/KV.js";
 import { HttpClient } from "../../infrastructure/http/HttpClient.js";
 import { ClickUpGateway } from "../../infrastructure/clickup/ClickUpGateway.js";
-import type { ClickUpGatewayConfig } from "../../infrastructure/clickup/ClickUpGateway.js";
-import { fromEnv, toSessionConfig, type SessionConfig } from "../../shared/config/schema.js";
+import type { ClickUpGatewayConfig, AuthScheme } from "../../infrastructure/clickup/ClickUpGateway.js";
 import {
   ListWorkspacesInput,
   ListSpacesInput,
@@ -700,67 +699,31 @@ type HealthPayload = {
   now: string;
 };
 
-type ResolvedGateway = {
-  config: ClickUpGatewayConfig;
-  httpClient: { baseUrl: string; defaultHeaders: Record<string, string> };
-};
-
-function toOrigin(value: string | undefined): string | undefined {
+function parseNumber(value: string | undefined, fallback: number): number {
   if (!value) {
-    return undefined;
+    return fallback;
   }
-  try {
-    const parsed = new URL(value);
-    return parsed.origin;
-  } catch {
-    return undefined;
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) {
+    return fallback;
   }
+  return parsed;
 }
 
-function resolveTimeoutMs(value: number | undefined): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-    return undefined;
+function resolveAuthScheme(value: string | undefined): AuthScheme {
+  if (value === "oauth" || value === "personal_token" || value === "auto") {
+    return value;
   }
-  return Math.trunc(value * 1000);
+  return "auto";
 }
 
-function resolveTeamId(value: number | undefined): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return undefined;
-  }
-  return Math.trunc(value);
-}
-
-function mergeHeaders(
-  base: Record<string, string>,
-  overrides: Record<string, string>
-): Record<string, string> {
-  const result: Record<string, string> = { ...base };
-  for (const [key, value] of Object.entries(overrides)) {
-    result[key] = value;
-  }
-  return result;
-}
-
-function resolveGatewayConfig(session: SessionConfig): ResolvedGateway {
-  const envSession = toSessionConfig(fromEnv());
-  const baseUrl =
-    toOrigin(session.baseUrl) ?? toOrigin(envSession.baseUrl) ?? "https://api.clickup.com";
-  const token = session.apiToken.trim().length > 0 ? session.apiToken : envSession.apiToken;
-  const authScheme = session.authScheme ?? envSession.authScheme ?? "auto";
-  const timeoutMs =
-    resolveTimeoutMs(session.requestTimeout) ??
-    resolveTimeoutMs(envSession.requestTimeout) ??
-    10000;
-  const defaultHeaders = mergeHeaders(envSession.defaultHeaders, session.defaultHeaders);
-  const defaultTeamId =
-    resolveTeamId(session.defaultTeamId) ??
-    resolveTeamId(envSession.defaultTeamId) ??
-    0;
-  return {
-    config: { baseUrl, token, authScheme, timeoutMs, defaultTeamId },
-    httpClient: { baseUrl, defaultHeaders }
-  };
+function resolveGatewayConfig(): ClickUpGatewayConfig {
+  const baseUrl = process.env.CLICKUP_BASE_URL ?? "https://api.clickup.com";
+  const token = process.env.CLICKUP_TOKEN ?? "";
+  const authScheme = resolveAuthScheme(process.env.CLICKUP_AUTH_SCHEME);
+  const timeoutMs = parseNumber(process.env.CLICKUP_TIMEOUT_MS, 10000);
+  const defaultTeamId = parseNumber(process.env.CLICKUP_DEFAULT_TEAM_ID, 0);
+  return { baseUrl, token, authScheme, timeoutMs, defaultTeamId };
 }
 
 function toOptionalString(value: unknown): string | undefined {
@@ -868,10 +831,7 @@ function mapTaskRecord(task: unknown): TaskIndexRecord {
   };
 }
 
-function resolveDependencies(
-  session: SessionConfig,
-  deps?: ToolDependencies
-): { gateway: ClickUpGateway; cache: ApiCache } {
+function resolveDependencies(deps?: ToolDependencies): { gateway: ClickUpGateway; cache: ApiCache } {
   if (deps?.gateway && deps?.cache) {
     return { gateway: deps.gateway, cache: deps.cache };
   }
@@ -879,12 +839,9 @@ function resolveDependencies(
   if (deps?.gateway) {
     return { gateway: deps.gateway, cache };
   }
-  const resolved = resolveGatewayConfig(session);
-  const client = new HttpClient({
-    baseUrl: resolved.httpClient.baseUrl,
-    defaultHeaders: resolved.httpClient.defaultHeaders
-  });
-  const gateway = new ClickUpGateway(client, cache, resolved.config);
+  const config = resolveGatewayConfig();
+  const client = new HttpClient({ baseUrl: config.baseUrl });
+  const gateway = new ClickUpGateway(client, cache, config);
   return { gateway, cache };
 }
 
@@ -912,14 +869,9 @@ export const healthTool: RegisteredTool<HealthPayload> = {
   execute: executeHealth
 };
 
-export async function registerTools(
-  server: McpServer,
-  runtime: RuntimeConfig,
-  session: SessionConfig,
-  deps?: ToolDependencies
-): Promise<RegisteredTool[]> {
+export async function registerTools(server: McpServer, runtime: RuntimeConfig, deps?: ToolDependencies): Promise<RegisteredTool[]> {
   void server;
-  const { gateway, cache } = resolveDependencies(session, deps);
+  const { gateway, cache } = resolveDependencies(deps);
   const docSearch = new DocSearch(gateway, cache);
   const bulkDocSearch = new BulkDocSearch(gateway, cache);
   const createDocUsecase = new CreateDoc(gateway);

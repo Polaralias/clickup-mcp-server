@@ -9,7 +9,6 @@ import { makeMemoryKV } from "../src/shared/KV.js";
 import { registerTools } from "../src/mcp/tools/registerTools.js";
 import { buildCatalogue } from "../src/mcp/tools/catalogue.js";
 import type { ToolDef } from "../src/mcp/tools/catalogue.js";
-import { createTestSession } from "./helpers/session.js";
 
 type GatewayStub = Pick<ClickUpGateway, "search_docs" | "fetch_tasks_for_index" | "get_task_by_id">;
 
@@ -21,7 +20,6 @@ describe("tool catalogue", () => {
     httpInitializeTimeoutMs: 45_000
   };
   const server = {} as McpServer;
-  const session = createTestSession();
 
   async function createTools() {
     const gateway: GatewayStub = {
@@ -36,7 +34,7 @@ describe("tool catalogue", () => {
       }
     };
     const cache = new ApiCache(makeMemoryKV());
-    return registerTools(server, runtime, session, { gateway: gateway as unknown as ClickUpGateway, cache });
+    return registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
   }
 
   it("Includes known tools and metadata", async () => {

@@ -10,7 +10,6 @@ import type { HttpTransportConfig, RuntimeConfig } from "../config/runtime.js";
 import { PROJECT_NAME } from "../config/constants.js";
 import { registerTools, RegisteredTool } from "./tools/registerTools.js";
 import { PACKAGE_VERSION } from "../shared/version.js";
-import { fromEnv, toSessionConfig } from "../shared/config/schema.js";
 
 type ToolListEntry = {
   name: string;
@@ -137,8 +136,7 @@ export async function startServer(runtime: RuntimeConfig): Promise<void> {
   const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
   server.registerCapabilities({ tools: { listChanged: true } });
   const notifyingServer = attachNotify(server);
-  const session = toSessionConfig(fromEnv());
-  const tools = await registerTools(server, runtime, session);
+  const tools = await registerTools(server, runtime);
   const toolMap = new Map<string, RegisteredTool>(tools.map(tool => [tool.name, tool]));
   const logger = createLogger("mcp.server");
 
