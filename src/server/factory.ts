@@ -159,7 +159,7 @@ export async function createServer(input?: Partial<AppConfig>): Promise<Server> 
     ready: Promise.resolve()
   };
   const ready = (async () => {
-    const tools = await registerTools(server, runtime);
+    const tools = await registerTools(server, runtime, sessionConfig);
     context.tools = tools;
     context.toolMap = new Map<string, RegisteredTool>(tools.map(tool => [tool.name, tool]));
     context.toolList = buildToolList(tools);

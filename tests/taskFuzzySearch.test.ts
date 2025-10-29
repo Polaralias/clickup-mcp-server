@@ -7,6 +7,7 @@ import { makeMemoryKV } from "../src/shared/KV.js";
 import type { ClickUpGateway } from "../src/infrastructure/clickup/ClickUpGateway.js";
 import { TaskSearchIndex } from "../src/application/services/TaskSearchIndex.js";
 import { registerTools } from "../src/mcp/tools/registerTools.js";
+import { createTestSession } from "./helpers/session.js";
 
 type GatewayStub = Pick<ClickUpGateway, "search_docs" | "fetch_tasks_for_index" | "get_task_by_id">;
 
@@ -58,7 +59,10 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, createTestSession(), {
+       gateway: gateway as unknown as ClickUpGateway,
+       cache
+     });
      const tool = tools.find(entry => entry.name === "clickup_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
@@ -106,7 +110,10 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, createTestSession(), {
+       gateway: gateway as unknown as ClickUpGateway,
+       cache
+     });
      const tool = tools.find(entry => entry.name === "clickup_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
@@ -175,7 +182,10 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, createTestSession(), {
+       gateway: gateway as unknown as ClickUpGateway,
+       cache
+     });
      const tool = tools.find(entry => entry.name === "clickup_bulk_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
@@ -220,7 +230,10 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, createTestSession(), {
+       gateway: gateway as unknown as ClickUpGateway,
+       cache
+     });
      const tool = tools.find(entry => entry.name === "clickup_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
@@ -251,7 +264,10 @@ describe("task fuzzy search tools", () => {
        }
      };
      const cache = new ApiCache(makeMemoryKV());
-     const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+     const tools = await registerTools(server, runtime, createTestSession(), {
+       gateway: gateway as unknown as ClickUpGateway,
+       cache
+     });
      const tool = tools.find(entry => entry.name === "clickup_task_fuzzy_search");
      if (!tool) {
        throw new Error("Tool not found");
