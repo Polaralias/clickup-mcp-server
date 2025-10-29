@@ -8,11 +8,6 @@ import {
   validateOrThrow,
   type AppConfig
 } from "./shared/config/schema.js";
-import { normaliseToolListInput } from "./shared/config/toolGate.js";
-
-const toolListSetting = z
-  .union([z.array(z.string().min(1)), z.string().min(1)])
-  .optional();
 
 const smitheryConfigSchema = z
   .object({
@@ -51,12 +46,6 @@ const smitheryConfigSchema = z
     authScheme: z
       .enum(["auto", "personal_token", "oauth"])
       .describe("Authentication scheme to use when authorising ClickUp requests")
-      .optional(),
-    toolAllowList: toolListSetting
-      .describe("Only expose the listed tool identifiers when provided")
-      .optional(),
-    toolDenyList: toolListSetting
-      .describe("Exclude the listed tool identifiers when provided")
       .optional()
   })
   .strict();
@@ -125,18 +114,6 @@ function mergeAppConfig(base: AppConfig, overrides: SmitheryConfig | undefined):
   }
   if (overrides.authScheme) {
     merged.authScheme = overrides.authScheme;
-  }
-  if (Object.prototype.hasOwnProperty.call(overrides, "toolAllowList")) {
-    const allow = normaliseToolListInput(overrides.toolAllowList ?? undefined);
-    if (allow !== undefined) {
-      merged.toolAllowList = allow;
-    }
-  }
-  if (Object.prototype.hasOwnProperty.call(overrides, "toolDenyList")) {
-    const deny = normaliseToolListInput(overrides.toolDenyList ?? undefined);
-    if (deny !== undefined) {
-      merged.toolDenyList = deny;
-    }
   }
   return merged;
 }

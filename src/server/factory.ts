@@ -30,7 +30,6 @@ import {
 import { ClickUpGateway } from "../infrastructure/clickup/ClickUpGateway.js";
 import { buildClickUpHeaders } from "../infrastructure/clickup/headers.js";
 import { mergeConfig, validateConfig, type AppConfig } from "../shared/config/smithery.js";
-import { createToolGate, filterToolsInPlace } from "../shared/config/toolGate.js";
 
 const serverContextSymbol = Symbol.for("clickup.mcp.serverContext");
 
@@ -148,10 +147,6 @@ export async function createServer(input?: Partial<AppConfig>): Promise<Server> 
   }
   const schemaConfig = toSchemaConfig(resolved);
   const sessionConfig = toSessionConfig(schemaConfig);
-  const toolGate = createToolGate({
-    allowList: resolved.toolAllowList,
-    denyList: resolved.toolDenyList
-  });
   const defaultConnectionId = "smithery";
   const notifier = attachNotify(server);
   const logger = createLogger("mcp.server");
@@ -168,13 +163,9 @@ export async function createServer(input?: Partial<AppConfig>): Promise<Server> 
   };
   const ready = (async () => {
     const tools = await registerTools(server, runtime);
-    const { kept, skipped } = filterToolsInPlace(tools, toolGate);
-    for (const entry of skipped) {
-      logger.info("tool_gated", { tool: entry.tool.name, reason: entry.reason });
-    }
-    context.tools = kept;
-    context.toolMap = new Map<string, RegisteredTool>(kept.map(tool => [tool.name, tool]));
-    context.toolList = buildToolList(kept);
+    context.tools = tools;
+    context.toolMap = new Map<string, RegisteredTool>(tools.map(tool => [tool.name, tool]));
+    context.toolList = buildToolList(tools);
   })();
   context.ready = ready;
   server.setRequestHandler(ListToolsRequestSchema, async () =>
