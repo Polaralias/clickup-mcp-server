@@ -563,7 +563,7 @@ export async function createServer(input?: Partial<AppConfig>): Promise<Server> 
   };
   const registerResource = setupResourceHandling(server, context, sessionConfig, defaultConnectionId);
   const ready = (async () => {
-    const tools = await registerTools(server, runtime);
+    const tools = await registerTools(server, runtime, sessionConfig);
     const { kept, skipped } = filterToolsInPlace(tools, toolGate);
     for (const entry of skipped) {
       logger.info("tool_gated", { tool: entry.tool.name, reason: entry.reason });

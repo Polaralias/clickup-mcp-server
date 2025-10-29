@@ -129,6 +129,10 @@ function debugEnabled(): boolean {
   return normalised !== "0" && normalised !== "false";
 }
 
+function isNotification(payload: JsonRpcRequest): boolean {
+  return !Object.prototype.hasOwnProperty.call(payload, "id");
+}
+
 export async function startHttpBridge(server: Server, options: { port: number; host?: string }): Promise<number> {
   const { port, host } = options;
   const context = getServerContext(server);
@@ -206,6 +210,17 @@ export async function startHttpBridge(server: Server, options: { port: number; h
         });
       })
     );
+  }
+
+  async function sendNotification(method: string, params: unknown, connectionId: string): Promise<void> {
+    await waitForServerReady(server);
+    const scope = { config: context.session, connectionId };
+    const payload = {
+      jsonrpc: "2.0" as const,
+      method,
+      params: isRecord(params) ? params : undefined
+    };
+    await withSessionScope(scope, () => clientTransport.send(payload));
   }
   const httpServer = createHttpServer(async (request, response) => {
     addCorsHeaders(response);
@@ -300,6 +315,22 @@ export async function startHttpBridge(server: Server, options: { port: number; h
       };
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ jsonrpc: "2.0", id, result }));
+      return;
+    }
+    if (isNotification(payload)) {
+      try {
+        await sendNotification(payload.method, payload.params, connectionId);
+        response.writeHead(204);
+        response.end();
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        response.writeHead(500, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ error: reason }));
+        context.logger.error("http_notification_failed", {
+          method: payload.method,
+          reason
+        });
+      }
       return;
     }
     try {

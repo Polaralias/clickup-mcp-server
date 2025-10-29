@@ -7,6 +7,7 @@ import { ApiCache } from "../src/infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../src/shared/KV.js";
 import { registerTools } from "../src/mcp/tools/registerTools.js";
 import { createToolGate, filterToolsInPlace, TOOL_ALLOW_ENV_KEY } from "../src/shared/config/toolGate.js";
+import type { SessionConfig } from "../src/shared/config/schema.js";
 
 type GatewayStub = Pick<ClickUpGateway, "search_docs" | "fetch_tasks_for_index" | "get_task_by_id">;
 
@@ -18,6 +19,13 @@ describe("tool gating", () => {
     httpInitializeTimeoutMs: 45_000
   };
   const server = {} as McpServer;
+  const session: SessionConfig = {
+    apiToken: "test-token",
+    authScheme: "auto",
+    baseUrl: "https://api.clickup.com/api/v2",
+    requestTimeout: 30,
+    defaultHeaders: {}
+  };
 
   async function createTools() {
     const gateway: GatewayStub = {
@@ -32,7 +40,10 @@ describe("tool gating", () => {
       }
     };
     const cache = new ApiCache(makeMemoryKV());
-    return registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+    return registerTools(server, runtime, session, {
+      gateway: gateway as unknown as ClickUpGateway,
+      cache
+    });
   }
 
   it("applies allow lists", async () => {
