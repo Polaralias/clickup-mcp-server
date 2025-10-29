@@ -46,6 +46,14 @@ const smitheryConfigSchema = z
     authScheme: z
       .enum(["auto", "personal_token", "oauth"])
       .describe("Authentication scheme to use when authorising ClickUp requests")
+      .optional(),
+    allowTools: z
+      .union([z.string(), z.array(z.string())])
+      .describe("Restrict available tools to this allow-list")
+      .optional(),
+    denyTools: z
+      .union([z.string(), z.array(z.string())])
+      .describe("Block these tools even when allow-listed")
       .optional()
   })
   .strict();
@@ -94,26 +102,27 @@ function mergeAppConfig(base: AppConfig, overrides: SmitheryConfig | undefined):
     return base;
   }
   const merged: AppConfig = { ...base };
-  if (overrides.apiToken) {
-    merged.apiToken = overrides.apiToken;
+  const { allowTools: _allow, denyTools: _deny, ...configOverrides } = overrides;
+  if (configOverrides.apiToken) {
+    merged.apiToken = configOverrides.apiToken;
   }
-  if (overrides.defaultTeamId !== undefined) {
-    merged.defaultTeamId = overrides.defaultTeamId;
+  if (configOverrides.defaultTeamId !== undefined) {
+    merged.defaultTeamId = configOverrides.defaultTeamId;
   }
-  if (overrides.primaryLanguage) {
-    merged.primaryLanguage = overrides.primaryLanguage;
+  if (configOverrides.primaryLanguage) {
+    merged.primaryLanguage = configOverrides.primaryLanguage;
   }
-  if (overrides.baseUrl) {
-    merged.baseUrl = overrides.baseUrl;
+  if (configOverrides.baseUrl) {
+    merged.baseUrl = configOverrides.baseUrl;
   }
-  if (overrides.requestTimeoutMs !== undefined) {
-    merged.requestTimeoutMs = overrides.requestTimeoutMs;
+  if (configOverrides.requestTimeoutMs !== undefined) {
+    merged.requestTimeoutMs = configOverrides.requestTimeoutMs;
   }
-  if (overrides.defaultHeadersJson) {
-    merged.defaultHeadersJson = overrides.defaultHeadersJson;
+  if (configOverrides.defaultHeadersJson) {
+    merged.defaultHeadersJson = configOverrides.defaultHeadersJson;
   }
-  if (overrides.authScheme) {
-    merged.authScheme = overrides.authScheme;
+  if (configOverrides.authScheme) {
+    merged.authScheme = configOverrides.authScheme;
   }
   return merged;
 }
@@ -156,9 +165,12 @@ export default async function createServer(
   const overrides = context?.config
     ? smitheryConfigSchema.parse(context.config)
     : undefined;
+  const gateOverrides = overrides
+    ? { allow: overrides.allowTools ?? null, deny: overrides.denyTools ?? null }
+    : undefined;
   const config = mergeAppConfig(baseConfig, overrides);
   validateOrThrow(config);
-  return createServerFactory(config);
+  return createServerFactory(config, { env: envSource, overrides: gateOverrides });
 }
 
 function resolveInvocationHref(): string | undefined {

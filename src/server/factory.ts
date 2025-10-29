@@ -24,6 +24,7 @@ import {
 import { ClickUpGateway } from "../infrastructure/clickup/ClickUpGateway.js";
 import { buildClickUpHeaders } from "../infrastructure/clickup/headers.js";
 import { mergeConfig, validateConfig, type AppConfig } from "../shared/config/smithery.js";
+import { createToolGate, type ToolGateInit } from "../shared/config/toolGate.js";
 
 const serverContextSymbol = Symbol.for("clickup.mcp.serverContext");
 
@@ -122,7 +123,10 @@ function toSchemaConfig(cfg: AppConfig): SchemaAppConfig {
   };
 }
 
-export async function createServer(input?: Partial<AppConfig>): Promise<Server> {
+export async function createServer(
+  input?: Partial<AppConfig>,
+  gateInit?: ToolGateInit
+): Promise<Server> {
   ensureGatewayPatched();
   const resolved = mergeConfig(input ?? {});
   const validation = validateConfig(resolved);
@@ -158,8 +162,32 @@ export async function createServer(input?: Partial<AppConfig>): Promise<Server> 
     defaultConnectionId,
     ready: Promise.resolve()
   };
+  const gate = createToolGate(gateInit);
+  const gateSnapshot = gate.snapshot();
+  if (gateSnapshot.allowList || gateSnapshot.denyList) {
+    logger.info("tool_gate_configured", gateSnapshot);
+  }
   const ready = (async () => {
     const tools = await registerTools(server, runtime, sessionConfig);
+    const filtered = gate.filter(tools, (tool, detail) => {
+      logger.info("tool_gate_skipped", {
+        tool: tool.name,
+        reason: detail.reason,
+        allowList: gateSnapshot.allowList,
+        denyList: gateSnapshot.denyList
+      });
+    });
+    const skipped = tools.length - filtered.length;
+    if (skipped > 0) {
+      tools.length = 0;
+      for (const tool of filtered) {
+        tools.push(tool);
+      }
+      logger.info("tool_gate_applied", {
+        skipped,
+        remaining: tools.map(tool => tool.name)
+      });
+    }
     context.tools = tools;
     context.toolMap = new Map<string, RegisteredTool>(tools.map(tool => [tool.name, tool]));
     context.toolList = buildToolList(tools);
