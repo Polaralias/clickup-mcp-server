@@ -15,7 +15,7 @@ async function start(): Promise<void> {
   }
 
   logInfo("bootstrap", "stdio_startup_begin");
-  const server = await createServer(config);
+  const server = createServer(config, { defaultConnectionId: "stdio" });
   const transport = new StdioServerTransport();
 
   transport.onerror = error => {
@@ -57,7 +57,6 @@ async function start(): Promise<void> {
 
   await server.connect(transport);
   const context = getServerContext(server);
-  context.defaultConnectionId = "stdio";
   await waitForServerReady(server);
   await context.notifier.notify("tools/list_changed", { tools: context.toolList });
   logInfo("bootstrap", "stdio_ready", { transport: "stdio", tools: context.tools.map(tool => tool.name) });

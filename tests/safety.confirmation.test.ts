@@ -6,7 +6,6 @@ import { ApiCache } from "../src/infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../src/shared/KV.js";
 import type { ClickUpGateway } from "../src/infrastructure/clickup/ClickUpGateway.js";
 import { registerTools } from "../src/mcp/tools/registerTools.js";
-import { createTestSession } from "./helpers/session.js";
 
 type GatewayFns = {
   create_doc: ReturnType<typeof vi.fn>;
@@ -60,12 +59,11 @@ describe("safety confirmation", () => {
     },
     server: {} as McpServer
   };
-  const session = createTestSession();
 
   it("requires confirm for attachment tool", async () => {
     const { gateway, fns } = createGateway();
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(context.server, context.runtime, session, { gateway, cache });
+    const tools = await registerTools(context.server, context.runtime, { gateway, cache });
     const tool = findTool(tools, "clickup_attach_file_to_task");
     const baseArgs = {
       taskId: "TASK-1",
@@ -88,7 +86,7 @@ describe("safety confirmation", () => {
   it("requires confirm for start timer", async () => {
     const { gateway, fns } = createGateway();
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(context.server, context.runtime, session, { gateway, cache });
+    const tools = await registerTools(context.server, context.runtime, { gateway, cache });
     const tool = findTool(tools, "clickup_start_timer");
     const missing = await tool.execute({ taskId: "TASK-1" }, context);
     expect(missing.isError).toBe(true);
@@ -106,7 +104,7 @@ describe("safety confirmation", () => {
   it("requires confirm for stop timer", async () => {
     const { gateway, fns } = createGateway();
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(context.server, context.runtime, session, { gateway, cache });
+    const tools = await registerTools(context.server, context.runtime, { gateway, cache });
     const tool = findTool(tools, "clickup_stop_timer");
     const missing = await tool.execute({ taskId: "TASK-1" }, context);
     expect(missing.isError).toBe(true);
@@ -124,7 +122,7 @@ describe("safety confirmation", () => {
   it("requires confirm for create doc", async () => {
     const { gateway, fns } = createGateway();
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(context.server, context.runtime, session, { gateway, cache });
+    const tools = await registerTools(context.server, context.runtime, { gateway, cache });
     const tool = findTool(tools, "clickup_create_doc");
     const baseArgs = { workspaceId: 1, title: "Doc", visibility: "PRIVATE" as const };
     const missing = await tool.execute(baseArgs, context);

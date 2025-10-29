@@ -12,7 +12,6 @@ import { registerTools } from "../src/mcp/tools/registerTools.js";
 import { ApiCache } from "../src/infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../src/shared/KV.js";
 import type { RuntimeConfig } from "../src/config/runtime.js";
-import { createTestSession } from "./helpers/session.js";
 
 type StartGatewayStub = Pick<ClickUpGateway, "start_timer">;
 type StopGatewayStub = Pick<ClickUpGateway, "stop_timer">;
@@ -214,8 +213,7 @@ describe("Time tools", () => {
     const server = {} as McpServer;
     const cache = new ApiCache(makeMemoryKV());
     const registerGateway = buildGatewayStub();
-    const session = createTestSession();
-    const tools = await registerTools(server, runtime, session, {
+    const tools = await registerTools(server, runtime, {
       gateway: registerGateway as unknown as ClickUpGateway,
       cache
     });
