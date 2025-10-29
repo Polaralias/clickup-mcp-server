@@ -6,6 +6,7 @@ import { ApiCache } from "../src/infrastructure/cache/ApiCache.js";
 import { makeMemoryKV } from "../src/shared/KV.js";
 import type { ClickUpGateway } from "../src/infrastructure/clickup/ClickUpGateway.js";
 import { registerTools } from "../src/mcp/tools/registerTools.js";
+import { createTestSession } from "./helpers/session.js";
 
 type GatewayStub = Pick<
   ClickUpGateway,
@@ -28,6 +29,7 @@ describe("hierarchy tools", () => {
     httpInitializeTimeoutMs: 45_000
   };
   const server = {} as McpServer;
+  const session = createTestSession();
 
   function buildBaseGateway(overrides: Partial<GatewayStub>): GatewayStub {
     return {
@@ -83,7 +85,10 @@ describe("hierarchy tools", () => {
       }
     });
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, session, {
+      gateway: gateway as unknown as ClickUpGateway,
+      cache
+    });
     const tool = tools.find(entry => entry.name === "clickup_list_spaces");
     if (!tool) {
       throw new Error("Tool not found");
@@ -125,7 +130,10 @@ describe("hierarchy tools", () => {
       }
     });
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, session, {
+      gateway: gateway as unknown as ClickUpGateway,
+      cache
+    });
     const tool = tools.find(entry => entry.name === "clickup_list_lists");
     if (!tool) {
       throw new Error("Tool not found");
@@ -158,7 +166,10 @@ describe("hierarchy tools", () => {
       }
     });
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, session, {
+      gateway: gateway as unknown as ClickUpGateway,
+      cache
+    });
     const tool = tools.find(entry => entry.name === "clickup_list_tags_for_space");
     if (!tool) {
       throw new Error("Tool not found");
@@ -196,7 +207,10 @@ describe("hierarchy tools", () => {
       }
     });
     const cache = new ApiCache(makeMemoryKV());
-    const tools = await registerTools(server, runtime, { gateway: gateway as unknown as ClickUpGateway, cache });
+    const tools = await registerTools(server, runtime, session, {
+      gateway: gateway as unknown as ClickUpGateway,
+      cache
+    });
     const tool = tools.find(entry => entry.name === "clickup_get_workspace_overview");
     if (!tool) {
       throw new Error("Tool not found");
