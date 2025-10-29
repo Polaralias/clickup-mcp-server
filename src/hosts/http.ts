@@ -38,7 +38,7 @@ async function start(): Promise<void> {
   }
 
   logInfo("bootstrap", "http_startup_begin");
-  const server = createServer(config, { defaultConnectionId: "http" });
+  const server = await createServer(config);
   const context = getServerContext(server);
   const { host, port } = resolveListenConfig();
 

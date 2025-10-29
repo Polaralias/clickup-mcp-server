@@ -87,9 +87,8 @@ export function mergeConfig(input: Partial<AppConfig>): AppConfig {
 }
 
 export function validateConfig(cfg: AppConfig): { ok: true } | { ok: false; message: string } {
-  const apiToken = toOptionalString(cfg.apiToken);
-  if (!apiToken) {
-    return { ok: false, message: "Missing apiToken" };
+  if (cfg.defaultTeamId !== undefined && !Number.isFinite(cfg.defaultTeamId)) {
+    return { ok: false, message: "Invalid defaultTeamId" };
   }
   return { ok: true };
 }
