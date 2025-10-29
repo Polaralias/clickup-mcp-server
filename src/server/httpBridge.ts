@@ -73,7 +73,6 @@ export async function startHttpBridge(server: Server, options: { port: number; h
   };
 
   await server.connect(transport);
-  await transport.start();
 
   const httpServer = createHttpServer(async (request, response) => {
     const startedAt = Date.now();
