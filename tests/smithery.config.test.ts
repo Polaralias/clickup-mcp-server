@@ -63,6 +63,20 @@ describe("smithery command context", () => {
     await server.close();
   });
 
+  it("ignores unknown Smithery config entries", async () => {
+    const server = await createServer({
+      config: {
+        apiToken: "config-token",
+        unexpected: "value",
+      } as Record<string, unknown>,
+    });
+
+    const context = getServerContext(server);
+    expect(context.session.apiToken).toBe("config-token");
+
+    await server.close();
+  });
+
   it("exposes the configuration schema on the Smithery entry point", () => {
     expect(createServerFromSmithery.configSchema).toBe(smitheryConfigSchema);
   });

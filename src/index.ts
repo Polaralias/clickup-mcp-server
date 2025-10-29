@@ -56,7 +56,7 @@ const smitheryConfigSchema = z
       .describe("Block these tools even when allow-listed")
       .optional()
   })
-  .strict();
+  .strip();
 
 type SmitheryConfig = z.infer<typeof smitheryConfigSchema>;
 
