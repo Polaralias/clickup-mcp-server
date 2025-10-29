@@ -156,6 +156,7 @@ export type RegisteredTool<TOutput = unknown> = {
   inputSchema: z.ZodTypeAny;
   inputJsonSchema: JsonSchema;
   execute: ToolExecutor<TOutput>;
+  requiresAuth?: boolean;
 };
 
 const healthInputSchema = z.object({}).strict();
@@ -866,7 +867,8 @@ export const healthTool: RegisteredTool<HealthPayload> = {
   annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
   inputSchema: healthInputSchema,
   inputJsonSchema: healthInputJsonSchema,
-  execute: executeHealth
+  execute: executeHealth,
+  requiresAuth: false
 };
 
 export async function registerTools(server: McpServer, runtime: RuntimeConfig, deps?: ToolDependencies): Promise<RegisteredTool[]> {
@@ -908,8 +910,12 @@ export async function registerTools(server: McpServer, runtime: RuntimeConfig, d
   const bulkTaskSearch = new BulkTaskFuzzySearch(taskSearch);
   const tools: RegisteredTool[] = [];
   const register = <TOutput>(tool: RegisteredTool<TOutput>): RegisteredTool<TOutput> => {
-    tools.push(tool as RegisteredTool);
-    return tool;
+    const normalised: RegisteredTool<TOutput> = {
+      ...tool,
+      requiresAuth: tool.requiresAuth ?? true
+    };
+    tools.push(normalised);
+    return normalised;
   };
   register(healthTool);
   const docTool: RegisteredTool<DocSearchOutputType> = {

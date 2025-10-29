@@ -1,11 +1,5 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import {
-  CallToolRequestSchema,
-  ErrorCode,
-  InitializeRequestSchema,
-  ListToolsRequestSchema,
-  McpError
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ErrorCode, InitializeRequestSchema, ListToolsRequestSchema, McpError } from "@modelcontextprotocol/sdk/types.js";
 import { loadRuntimeConfig, type RuntimeConfig } from "../config/runtime.js";
 import { PROJECT_NAME } from "../config/constants.js";
 import { registerTools, type RegisteredTool } from "../mcp/tools/registerTools.js";
@@ -137,11 +131,9 @@ export async function createServer(input?: Partial<AppConfig>): Promise<Server> 
   const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
   server.registerCapabilities({ tools: { listChanged: true } });
   if (!validation.ok) {
+    const reason = validation.message ?? "Invalid configuration";
     server.setRequestHandler(InitializeRequestSchema, () => {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        "Missing apiToken. Provide in Smithery config UI or set CLICKUP_TOKEN."
-      );
+      throw new McpError(ErrorCode.InvalidParams, reason);
     });
     return server;
   }
@@ -150,6 +142,11 @@ export async function createServer(input?: Partial<AppConfig>): Promise<Server> 
   const defaultConnectionId = "smithery";
   const notifier = attachNotify(server);
   const logger = createLogger("mcp.server");
+  if (sessionConfig.apiToken.trim().length === 0) {
+    logger.warn("session_missing_token", {
+      message: "ClickUp API token not provided; most tools will fail until a token is supplied."
+    });
+  }
   const context: ServerContext = {
     runtime,
     notifier,
@@ -190,6 +187,14 @@ export async function createServer(input?: Partial<AppConfig>): Promise<Server> 
           return { content: [], structuredContent: result, isError: true };
         }
         const args = request.params.arguments ?? {};
+        if (tool.requiresAuth !== false && context.session.apiToken.trim().length === 0) {
+          logger.warn("tool_invocation_missing_token", { tool: toolName });
+          const failure = err(
+            "INVALID_PARAMETER",
+            "Missing ClickUp API token. Provide via Smithery session settings or the CLICKUP_TOKEN environment variable."
+          );
+          return { content: [], structuredContent: failure, isError: true };
+        }
         try {
           const outcome = await executeTool(tool, args, server, runtime);
           logger.info("tool_invocation_completed", { tool: toolName, isError: outcome.isError });

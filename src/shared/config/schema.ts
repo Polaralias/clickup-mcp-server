@@ -144,9 +144,6 @@ export function fromEnv(env?: EnvSource): AppConfig {
 }
 
 export function validateOrThrow(config: AppConfig): void {
-  if (!config.apiToken || config.apiToken.trim().length === 0) {
-    throw new Error("Missing ClickUp API token");
-  }
   if (config.defaultTeamId !== undefined && !Number.isFinite(config.defaultTeamId)) {
     throw new Error("Invalid ClickUp default team id");
   }

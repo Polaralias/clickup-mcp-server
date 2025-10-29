@@ -1,5 +1,8 @@
 # Audit Log
 
+## 2025-10-29
+- Swapped the HTTP bridge to the SDK’s Streamable HTTP transport and introduced tool-level token checks so Smithery sessions without credentials can initialise successfully while still failing authenticated tool calls explicitly.
+
 ## 2025-10-28
 - Pointed the Smithery start command at `src/server/smithery.ts:createServerFromSmithery` so configuration and auth schemas load correctly in the UI.
 

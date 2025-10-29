@@ -154,6 +154,8 @@ Maintainers and LLM-based extensions must uphold the following:
   * `MCP_HTTP_ENABLE_JSON_RESPONSE`, `MCP_HTTP_ALLOWED_HOSTS`, `MCP_HTTP_ALLOWED_ORIGINS`, `MCP_HTTP_ENABLE_DNS_REBINDING_PROTECTION`.
   * `MCP_HTTP_INITIALIZE_TIMEOUT_MS` (default `45000`) to control the HTTP bridge timeout for `initialize` requests.
 * HTTP responses include permissive CORS headers unless overridden via the env vars above.
+* The HTTP bridge now proxies requests through the SDK’s `StreamableHTTPServerTransport`, ensuring Smithery’s Streamable HTTP expectations (chunked responses, SSE negotiation, DNS rebinding guards) are satisfied without bespoke framing logic.
+* `initialize` always succeeds even when no ClickUp token is supplied; every tool except `health` enforces token presence and returns `INVALID_PARAMETER` when a session attempts an authenticated call without credentials.
 * Both transports emit `tools/list_changed` notifications after connection to signal readiness.
 * The HTTP bridge now accepts POST requests on both `/` and `/mcp`, serves `GET /healthz`, caps JSON bodies at 1 MB, and honours `OPTIONS` for those paths with CORS headers.
 * `MCP_DEBUG` defaults to `1`, which logs the request line and status for each HTTP interaction without exposing payloads.
