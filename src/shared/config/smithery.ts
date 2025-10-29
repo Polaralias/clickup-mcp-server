@@ -7,6 +7,8 @@ export type AppConfig = {
   baseUrl?: string;
   requestTimeoutMs?: number;
   defaultHeadersJson?: string;
+  toolAllowList?: string[];
+  toolDenyList?: string[];
 };
 
 function toOptionalString(value: unknown): string | undefined {
@@ -53,6 +55,12 @@ function fromLegacy(config: LegacyAppConfig): AppConfig {
   if (defaultHeadersJson) {
     result.defaultHeadersJson = defaultHeadersJson;
   }
+  if (Array.isArray(config.toolAllowList)) {
+    result.toolAllowList = [...config.toolAllowList];
+  }
+  if (Array.isArray(config.toolDenyList)) {
+    result.toolDenyList = [...config.toolDenyList];
+  }
   return result;
 }
 
@@ -82,6 +90,16 @@ export function mergeConfig(input: Partial<AppConfig>): AppConfig {
   const defaultHeadersJson = toOptionalString(input.defaultHeadersJson);
   if (defaultHeadersJson !== undefined) {
     merged.defaultHeadersJson = defaultHeadersJson;
+  }
+  if (input.toolAllowList !== undefined) {
+    merged.toolAllowList = Array.isArray(input.toolAllowList)
+      ? [...input.toolAllowList]
+      : undefined;
+  }
+  if (input.toolDenyList !== undefined) {
+    merged.toolDenyList = Array.isArray(input.toolDenyList)
+      ? [...input.toolDenyList]
+      : undefined;
   }
   return merged;
 }
