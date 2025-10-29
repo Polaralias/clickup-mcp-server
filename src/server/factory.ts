@@ -130,6 +130,22 @@ async function loadReferenceDocument(document: ReferenceDocument, logger: Return
 }
 
 async function registerReferenceResources(server: Server, context: ServerContext): Promise<void> {
+  if (typeof (server as Server & { registerResource?: unknown }).registerResource !== "function") {
+    context.logger.warn("reference_resources_unsupported", {
+      message: "MCP SDK does not expose registerResource; skipping reference resource registration"
+    });
+    return;
+  }
+
+  const registerResource = (server as Server & {
+    registerResource: (
+      name: string,
+      uri: string | ResourceTemplate,
+      config: { title: string; description: string; mimeType: string },
+      handler: (...args: unknown[]) => Promise<{ contents: { uri: string; text: string }[] }>
+    ) => void;
+  }).registerResource;
+
   const configurationGuideUri = "clickup-mcp://docs/configuration-guide";
   const referenceIndexUri = "clickup-mcp://docs/reference-index";
   const toolReferenceUri = "clickup-mcp://docs/tool-reference";
@@ -164,7 +180,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
 
   const referenceDocumentMap = new Map(referenceDocuments.map(document => [document.slug, document]));
 
-  server.registerResource(
+  registerResource(
     "configuration_guide",
     configurationGuideUri,
     {
@@ -190,7 +206,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
     mimeType: "text/markdown"
   };
 
-  server.registerResource(
+  registerResource(
     "fetch_clickup_reference_page",
     referenceTemplate,
     {
