@@ -160,6 +160,11 @@ Maintainers and LLM-based extensions must uphold the following:
 * The HTTP bridge now accepts POST requests on both `/` and `/mcp`, serves `GET /healthz`, caps JSON bodies at 1 MB, and honours `OPTIONS` for those paths with CORS headers.
 * `MCP_DEBUG` defaults to `1`, which logs the request line and status for each HTTP interaction without exposing payloads.
 
+### Tool gating configuration
+* Allow-list and deny-list behaviour is controlled via the environment variables `MCP_TOOLS_ALLOW`, `MCP_TOOLS_ALLOW_LIST`, `MCP_TOOL_ALLOW`, `MCP_TOOL_ALLOW_LIST`, `MCP_TOOLS_DENY`, `MCP_TOOLS_DENY_LIST`, `MCP_TOOL_DENY`, and `MCP_TOOL_DENY_LIST`.
+* Smithery overrides expose the same controls through `allowTools` and `denyTools` entries in the configuration schema; these take precedence over environment variables when provided.
+* When gating excludes a tool the server emits `tool_gate_skipped` logs and records a summary with `tool_gate_configured` and `tool_gate_applied`; ensure any new tooling respects this audit trail.
+
 ## 11. Workflow Examples and Patterns
 ### Example A: Automated backlog triage
 Intent: ensure urgent issues receive prompt attention without unsafe automation.
