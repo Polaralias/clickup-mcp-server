@@ -1,5 +1,13 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { CallToolRequestSchema, ErrorCode, InitializeRequestSchema, ListToolsRequestSchema, McpError } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  InitializeRequestSchema,
+  ListToolsRequestSchema,
+  McpError,
+  type ResourceTemplate
+} from "@modelcontextprotocol/sdk/types.js";
+import { readFile } from "node:fs/promises";
 import { loadRuntimeConfig, type RuntimeConfig } from "../config/runtime.js";
 import { PROJECT_NAME } from "../config/constants.js";
 import { registerTools, type RegisteredTool } from "../mcp/tools/registerTools.js";
@@ -51,6 +59,16 @@ type ServerContext = {
   ready: Promise<void>;
 };
 
+type ReferenceDocument = {
+  slug: string;
+  uri: string;
+  title: string;
+  description: string;
+  path: string;
+  mimeType: string;
+  extract?: (markdown: string) => string;
+};
+
 function ensureGatewayPatched(): void {
   if (gatewayPatched) {
     return;
@@ -81,6 +99,205 @@ function buildToolList(tools: RegisteredTool[]): ToolListEntry[] {
     annotations: tool.annotations,
     inputSchema: tool.inputJsonSchema
   }));
+}
+
+function extractMarkdownSection(markdown: string, heading: string): string {
+  const lines = markdown.split("\n");
+  const headingIndex = lines.findIndex(line => line.trim().toLowerCase() === heading.trim().toLowerCase());
+  if (headingIndex === -1) {
+    return markdown.trim();
+  }
+  let endIndex = lines.length;
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index])) {
+      endIndex = index;
+      break;
+    }
+  }
+  return lines.slice(headingIndex, endIndex).join("\n").trim();
+}
+
+async function loadReferenceDocument(document: ReferenceDocument, logger: ReturnType<typeof createLogger>): Promise<string> {
+  try {
+    const fileUrl = new URL(document.path, import.meta.url);
+    const content = await readFile(fileUrl, "utf-8");
+    return document.extract ? document.extract(content) : content.trim();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error("reference_resource_read_failed", { slug: document.slug, message });
+    return `Resource ${document.title} is currently unavailable. Please review server logs for details.`;
+  }
+}
+
+async function registerReferenceResources(server: Server, context: ServerContext): Promise<void> {
+  const configurationGuideUri = "clickup-mcp://docs/configuration-guide";
+  const referenceIndexUri = "clickup-mcp://docs/reference-index";
+  const toolReferenceUri = "clickup-mcp://docs/tool-reference";
+
+  const referenceDocuments: ReferenceDocument[] = [
+    {
+      slug: "configuration-guide",
+      uri: configurationGuideUri,
+      title: "Setup and Configuration",
+      description: "Core environment configuration guidance for ClickUp-MCP.",
+      path: "../../docs/HANDBOOK.md",
+      mimeType: "text/markdown",
+      extract: markdown => extractMarkdownSection(markdown, "## 3. Setup and Configuration")
+    },
+    {
+      slug: "operational-handbook",
+      uri: "clickup-mcp://docs/reference/operational-handbook",
+      title: "Operational Handbook",
+      description: "Full ClickUp-MCP operational handbook covering architecture and safety.",
+      path: "../../docs/HANDBOOK.md",
+      mimeType: "text/markdown"
+    },
+    {
+      slug: "operations-runbook",
+      uri: "clickup-mcp://docs/reference/operations-runbook",
+      title: "Operations Runbook",
+      description: "Actionable routines for daily operations and incident response.",
+      path: "../../docs/OPERATIONS.md",
+      mimeType: "text/markdown"
+    }
+  ];
+
+  const referenceDocumentMap = new Map(referenceDocuments.map(document => [document.slug, document]));
+
+  server.registerResource(
+    "configuration_guide",
+    configurationGuideUri,
+    {
+      title: "ClickUp-MCP Configuration Guide",
+      description: "Deployment prerequisites, environment variables, and setup guidance.",
+      mimeType: "text/markdown"
+    },
+    async () => ({
+      contents: [
+        {
+          uri: configurationGuideUri,
+          text: await loadReferenceDocument(referenceDocumentMap.get("configuration-guide")!, context.logger)
+        }
+      ]
+    })
+  );
+
+  const referenceTemplate: ResourceTemplate = {
+    name: "clickup_reference_page",
+    title: "ClickUp Reference Page",
+    uriTemplate: "clickup-mcp://docs/reference/{slug}",
+    description: "Resolves ClickUp-MCP reference documentation by slug.",
+    mimeType: "text/markdown"
+  };
+
+  server.registerResource(
+    "fetch_clickup_reference_page",
+    referenceTemplate,
+    {
+      title: "Fetch ClickUp Reference Page",
+      description: "Retrieves a ClickUp-MCP reference document identified by slug.",
+      mimeType: "text/markdown"
+    },
+    async (_uri, variables: Record<string, unknown>) => {
+      const slug = String(variables.slug ?? "").toLowerCase();
+      const document = referenceDocumentMap.get(slug);
+      if (!document) {
+        context.logger.warn("reference_resource_missing", { slug });
+        return {
+          contents: [
+            {
+              uri: `clickup-mcp://docs/reference/${slug}`,
+              text: `No ClickUp-MCP reference page found for slug: ${slug}`
+            }
+          ]
+        };
+      }
+      return {
+        contents: [
+          {
+            uri: document.uri,
+            text: await loadReferenceDocument(document, context.logger)
+          }
+        ]
+      };
+    }
+  );
+
+  server.registerResource(
+    "list_clickup_reference_links",
+    referenceIndexUri,
+    {
+      title: "ClickUp Reference Index",
+      description: "Index of ClickUp-MCP reference materials available as resources.",
+      mimeType: "application/json"
+    },
+    async () => {
+      const links = [
+        ...referenceDocuments.map(document => ({
+          name: document.slug,
+          title: document.title,
+          uri: document.uri,
+          description: document.description,
+          mimeType: document.mimeType
+        })),
+        {
+          name: "tool-reference",
+          title: "ClickUp-MCP Tool Reference",
+          uri: toolReferenceUri,
+          description: "Complete list of registered tools with input JSON schemas.",
+          mimeType: "application/json"
+        }
+      ];
+      return {
+        contents: [
+          {
+            uri: referenceIndexUri,
+            json: {
+              generatedAt: new Date().toISOString(),
+              resources: links
+            }
+          }
+        ]
+      };
+    }
+  );
+
+  server.registerResource(
+    "tool_reference",
+    toolReferenceUri,
+    {
+      title: "ClickUp-MCP Tool Reference",
+      description: "Metadata and JSON schemas for every registered tool.",
+      mimeType: "application/json"
+    },
+    async () => ({
+      contents: [
+        {
+          uri: toolReferenceUri,
+          json: {
+            generatedAt: new Date().toISOString(),
+            tools: context.tools.map(tool => ({
+              name: tool.name,
+              description: tool.description,
+              annotations: tool.annotations,
+              requiresAuth: tool.requiresAuth !== false,
+              inputSchema: tool.inputJsonSchema
+            }))
+          }
+        }
+      ]
+    })
+  );
+
+  await server.sendResourceListChanged();
+  context.logger.info("reference_resources_registered", {
+    resources: [
+      "configuration_guide",
+      "fetch_clickup_reference_page",
+      "list_clickup_reference_links",
+      "tool_reference"
+    ]
+  });
 }
 
 async function executeTool(
@@ -133,7 +350,7 @@ export async function createServer(
   const runtime = loadRuntimeConfig();
   configureLogging({ level: runtime.logLevel });
   const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
-  server.registerCapabilities({ tools: { listChanged: true } });
+  server.registerCapabilities({ tools: { listChanged: true }, resources: { listChanged: true } });
   if (!validation.ok) {
     const reason = validation.message ?? "Invalid configuration";
     server.setRequestHandler(InitializeRequestSchema, () => {
@@ -191,6 +408,7 @@ export async function createServer(
     context.tools = tools;
     context.toolMap = new Map<string, RegisteredTool>(tools.map(tool => [tool.name, tool]));
     context.toolList = buildToolList(tools);
+    await registerReferenceResources(server, context);
   })();
   context.ready = ready;
   server.setRequestHandler(ListToolsRequestSchema, async () =>
