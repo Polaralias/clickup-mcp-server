@@ -159,6 +159,7 @@ Maintainers and LLM-based extensions must uphold the following:
 * Both transports emit `tools/list_changed` notifications after connection to signal readiness.
 * The HTTP bridge now accepts POST requests on both `/` and `/mcp`, serves `GET /healthz`, caps JSON bodies at 1 MB, and honours `OPTIONS` for those paths with CORS headers.
 * `MCP_DEBUG` defaults to `1`, which logs the request line and status for each HTTP interaction without exposing payloads.
+* The HTTP bridge now normalises missing or incomplete POST `Accept` headers to advertise both `application/json` and `text/event-stream`, ensuring hosted scanners that only request JSON can complete `initialize` without manual header overrides.
 
 ### Tool gating configuration
 * Allow-list and deny-list behaviour is controlled via the environment variables `MCP_TOOLS_ALLOW`, `MCP_TOOLS_ALLOW_LIST`, `MCP_TOOL_ALLOW`, `MCP_TOOL_ALLOW_LIST`, `MCP_TOOLS_DENY`, `MCP_TOOLS_DENY_LIST`, `MCP_TOOL_DENY`, and `MCP_TOOL_DENY_LIST`.

@@ -1,6 +1,10 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer as createHttpServer,
+  type IncomingMessage,
+  type ServerResponse
+} from "node:http";
 import type { AddressInfo } from "node:net";
 import { URL } from "node:url";
 import type { HttpTransportConfig } from "../config/runtime.js";
@@ -8,6 +12,7 @@ import { getServerContext } from "./factory.js";
 
 const SUPPORTED_PATHS = new Set(["/", "/mcp"]);
 const HEALTH_PATH = "/healthz";
+const REQUIRED_ACCEPT_TYPES = ["application/json", "text/event-stream"] as const;
 
 function parseUrl(raw: string | undefined): URL {
   return new URL(raw ?? "", "http://localhost");
@@ -36,6 +41,57 @@ function writeJson(response: ServerResponse, status: number, body: unknown): voi
     response.writeHead(status, { "Content-Type": "application/json" });
   }
   response.end(JSON.stringify(body));
+}
+
+function collectAcceptSegments(value: string | string[] | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+  const source = Array.isArray(value) ? value : [value];
+  const segments: string[] = [];
+  for (const entry of source) {
+    if (!entry) {
+      continue;
+    }
+    for (const segment of entry.split(",")) {
+      const trimmed = segment.trim();
+      if (trimmed) {
+        segments.push(trimmed);
+      }
+    }
+  }
+  return segments;
+}
+
+function baseMediaType(value: string): string | undefined {
+  const [type] = value.split(";");
+  const trimmed = type?.trim().toLowerCase();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+export function normaliseAcceptHeader(value: string | string[] | undefined): string {
+  const segments = collectAcceptSegments(value);
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const segment of segments) {
+    const mediaType = baseMediaType(segment);
+    if (!mediaType || seen.has(mediaType)) {
+      continue;
+    }
+    seen.add(mediaType);
+    result.push(segment);
+  }
+  for (const required of REQUIRED_ACCEPT_TYPES) {
+    if (!seen.has(required)) {
+      seen.add(required);
+      result.push(required);
+    }
+  }
+  return result.join(", ");
+}
+
+function ensureAcceptHeader(request: IncomingMessage): void {
+  request.headers.accept = normaliseAcceptHeader(request.headers.accept);
 }
 
 function logRequest(request: IncomingMessage, response: ServerResponse, startedAt: number): void {
@@ -105,6 +161,10 @@ export async function startHttpBridge(server: Server, options: { port: number; h
     }
 
     applyCors(response, httpConfig);
+
+    if ((request.method ?? "").toUpperCase() === "POST") {
+      ensureAcceptHeader(request);
+    }
 
     try {
       await transport.handleRequest(request as IncomingMessage, response);
