@@ -5,6 +5,9 @@
 - Added tool gating with allow and deny lists sourced from environment variables or Smithery configuration, filtering the MCP registry and emitting audit logs for skipped tools.
 - Relaxed the Smithery configuration schema to strip unknown keys and guarded reference resource registration when the MCP SDK omits `registerResource`, preventing Smithery configuration rejections and unhandled errors.
 
+## 2025-10-30
+- Normalised HTTP POST `Accept` headers before delegating to the MCP SDK so hosted clients that only request JSON can complete `initialize` successfully without negotiating streaming support explicitly.
+
 ## 2025-10-28
 - Pointed the Smithery start command at `src/server/smithery.ts:createServerFromSmithery` so configuration and auth schemas load correctly in the UI.
 
