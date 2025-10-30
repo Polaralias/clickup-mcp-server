@@ -353,6 +353,30 @@ function buildSessionScope(config: SessionConfig, connectionId: string): Session
   return { config, connectionId };
 }
 
+function resolveMissingSessionFields(config: SessionConfig): string[] {
+  const missing: string[] = [];
+  if (config.apiToken.trim().length === 0) {
+    missing.push("apiToken");
+  }
+  const teamId = config.defaultTeamId;
+  if (teamId === undefined || !Number.isFinite(teamId) || teamId <= 0) {
+    missing.push("defaultTeamId");
+  }
+  return missing;
+}
+
+function formatMissingFields(fields: string[]): string {
+  if (fields.length === 1) {
+    return `'${fields[0]}'`;
+  }
+  if (fields.length === 2) {
+    return `'${fields[0]}' and '${fields[1]}'`;
+  }
+  const prefix = fields.slice(0, -1).map(field => `'${field}'`).join(", ");
+  const suffix = `'${fields[fields.length - 1]}'`;
+  return `${prefix}, and ${suffix}`;
+}
+
 function toSchemaConfig(cfg: AppConfig): SchemaAppConfig {
   return {
     apiToken: cfg.apiToken ?? "",
@@ -374,6 +398,9 @@ export async function createServer(
   const runtime = loadRuntimeConfig();
   configureLogging({ level: runtime.logLevel });
   const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
+  const defaultInitialize = (
+    server as unknown as { _oninitialize: (request: unknown) => Promise<unknown> }
+  )._oninitialize.bind(server) as (request: unknown) => Promise<unknown>;
   server.registerCapabilities({ tools: { listChanged: true }, resources: { listChanged: true } });
   if (!validation.ok) {
     const reason = validation.message ?? "Invalid configuration";
@@ -435,6 +462,23 @@ export async function createServer(
     await registerReferenceResources(server, context);
   })();
   context.ready = ready;
+  server.setRequestHandler(InitializeRequestSchema, request =>
+    withSessionScope(buildSessionScope(sessionConfig, defaultConnectionId), () =>
+      withCorrelationId(newCorrelationId(), async () => {
+        const missing = resolveMissingSessionFields(context.session);
+        if (missing.length > 0) {
+          logger.warn("initialize_missing_configuration", { missing });
+          const description = formatMissingFields(missing);
+          const message = `Missing required configuration: ${description}.`;
+          throw new McpError(ErrorCode.InvalidParams, message, { missing });
+        }
+        await ready;
+        const response = (await defaultInitialize(request)) as { protocolVersion?: string };
+        logger.info("initialize_completed", { protocolVersion: response.protocolVersion });
+        return response;
+      })
+    )
+  );
   server.setRequestHandler(ListToolsRequestSchema, async () =>
     withSessionScope(buildSessionScope(sessionConfig, defaultConnectionId), () =>
       withCorrelationId(newCorrelationId(), async () => {
