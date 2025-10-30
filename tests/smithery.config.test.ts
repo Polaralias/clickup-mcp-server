@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import createServer from "../src/index.js";
 import {
   createServerFromSmithery,
@@ -75,6 +76,40 @@ describe("smithery command context", () => {
     expect(context.session.apiToken).toBe("config-token");
 
     await server.close();
+  });
+
+  it("wraps Smithery config validation failures in MCP errors", async () => {
+    await expect(
+      createServer({
+        config: {
+          defaultTeamId: "{{TEAM_ID}}",
+        } as Record<string, unknown>,
+      })
+    ).rejects.toMatchObject({
+      code: ErrorCode.InvalidParams,
+      message: expect.stringContaining("defaultTeamId"),
+      data: expect.objectContaining({ issues: expect.any(Array) }),
+    });
+  });
+
+  it("translates application config validation failures into MCP errors", async () => {
+    await expect(
+      createServer({
+        config: {
+          apiToken: "token",
+        },
+        env: {
+          CLICKUP_DEFAULT_TEAM_ID: "not-a-number",
+        },
+      })
+    ).rejects.toSatisfy((error: unknown) => {
+      if (!(error instanceof McpError)) {
+        return false;
+      }
+      expect(error.code).toBe(ErrorCode.InvalidParams);
+      expect(error.message).toContain("Invalid application configuration");
+      return true;
+    });
   });
 
   it("exposes the configuration schema on the Smithery entry point", () => {

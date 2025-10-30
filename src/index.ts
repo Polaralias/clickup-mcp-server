@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { loadRuntimeConfig } from "./config/runtime.js";
 import { createServer as createServerFactory } from "./server/factory.js";
@@ -65,6 +66,30 @@ export type SmitheryCommandContext = {
   env?: Record<string, string | undefined>;
   auth?: unknown;
 };
+
+function formatZodIssue(issue: z.ZodIssue): string {
+  const path = issue.path?.length ? issue.path.map(segment => String(segment)).join(".") : "root";
+  return `${path}: ${issue.message}`;
+}
+
+function toInvalidConfigError(error: unknown, source: "smithery" | "application"): McpError {
+  if (error instanceof McpError) {
+    return error;
+  }
+  if (error instanceof z.ZodError) {
+    const issues = error.issues ?? [];
+    const description = issues.length
+      ? issues.map(formatZodIssue).join("; ")
+      : "Configuration failed validation";
+    const message = `Invalid ${source} configuration: ${description}`;
+    return new McpError(ErrorCode.InvalidParams, message, {
+      issues,
+    });
+  }
+  const reason = error instanceof Error ? error.message : String(error);
+  const message = reason ? `Invalid ${source} configuration: ${reason}` : "Invalid configuration";
+  return new McpError(ErrorCode.InvalidParams, message);
+}
 
 function extractAuthValue(value: unknown): string | undefined {
   if (typeof value === "string") {
@@ -162,14 +187,23 @@ export default async function createServer(
     ...normaliseAuthSource(context?.auth)
   };
   const baseConfig = fromEnv(envSource);
-  const overrides = context?.config
-    ? smitheryConfigSchema.parse(context.config)
-    : undefined;
+  let overrides: SmitheryConfig | undefined;
+  if (context?.config !== undefined) {
+    try {
+      overrides = smitheryConfigSchema.parse(context.config);
+    } catch (error) {
+      throw toInvalidConfigError(error, "smithery");
+    }
+  }
   const gateOverrides = overrides
     ? { allow: overrides.allowTools ?? null, deny: overrides.denyTools ?? null }
     : undefined;
   const config = mergeAppConfig(baseConfig, overrides);
-  validateOrThrow(config);
+  try {
+    validateOrThrow(config);
+  } catch (error) {
+    throw toInvalidConfigError(error, "application");
+  }
   return createServerFactory(config, { env: envSource, overrides: gateOverrides });
 }
 
