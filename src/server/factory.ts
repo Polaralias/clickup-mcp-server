@@ -137,14 +137,21 @@ async function registerReferenceResources(server: Server, context: ServerContext
     return;
   }
 
-  const registerResource = (server as Server & {
-    registerResource: (
-      name: string,
-      uri: string | ResourceTemplate,
-      config: { title: string; description: string; mimeType: string },
-      handler: (...args: unknown[]) => Promise<{ contents: { uri: string; text: string }[] }>
-    ) => void;
-  }).registerResource;
+  type ResourceHandlerResult = {
+    contents: (
+      | { uri: string; text: string }
+      | { uri: string; json: unknown }
+    )[];
+  };
+
+  type RegisterResourceFn = (
+    name: string,
+    uri: string | ResourceTemplate,
+    config: { title: string; description: string; mimeType: string },
+    handler: (...args: unknown[]) => Promise<ResourceHandlerResult>
+  ) => void;
+
+  const registerResource = (server as Server & { registerResource: RegisterResourceFn }).registerResource;
 
   const configurationGuideUri = "clickup-mcp://docs/configuration-guide";
   const referenceIndexUri = "clickup-mcp://docs/reference-index";
@@ -214,7 +221,8 @@ async function registerReferenceResources(server: Server, context: ServerContext
       description: "Retrieves a ClickUp-MCP reference document identified by slug.",
       mimeType: "text/markdown"
     },
-    async (_uri, variables: Record<string, unknown>) => {
+    async (...args: unknown[]) => {
+      const variables = (args[1] as Record<string, unknown> | undefined) ?? {};
       const slug = String(variables.slug ?? "").toLowerCase();
       const document = referenceDocumentMap.get(slug);
       if (!document) {
@@ -239,7 +247,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
     }
   );
 
-  server.registerResource(
+  registerResource(
     "list_clickup_reference_links",
     referenceIndexUri,
     {
@@ -278,7 +286,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
     }
   );
 
-  server.registerResource(
+  registerResource(
     "tool_reference",
     toolReferenceUri,
     {
