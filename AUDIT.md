@@ -1,5 +1,8 @@
 # Audit Log
 
+## 2025-10-31
+- Hardened the initialise handshake to return `INVALID_PARAMS` when `apiToken` or `defaultTeamId` are missing so Smithery sees a healthy 200 response and can prompt for credentials instead of tripping an HTTP 500.
+
 ## 2025-10-29
 - Swapped the HTTP bridge to the SDK’s Streamable HTTP transport and introduced tool-level token checks so Smithery sessions without credentials can initialise successfully while still failing authenticated tool calls explicitly.
 - Added tool gating with allow and deny lists sourced from environment variables or Smithery configuration, filtering the MCP registry and emitting audit logs for skipped tools.
