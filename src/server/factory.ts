@@ -3,8 +3,13 @@ import {
   CallToolRequestSchema,
   ErrorCode,
   InitializeRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ListResourcesRequestSchema,
   ListToolsRequestSchema,
   McpError,
+  ReadResourceRequestSchema,
+  type Resource,
+  type ResourceContents,
   type ResourceTemplate
 } from "@modelcontextprotocol/sdk/types.js";
 import { readFile } from "node:fs/promises";
@@ -47,12 +52,29 @@ type ToolListEntry = {
 
 type NotifyingServer = Server & { notify: (method: string, params: unknown) => Promise<void> };
 
+type ResourceReadResult = { contents: Array<ResourceContents & Record<string, unknown>> };
+
+type RegisteredResource = {
+  definition: Resource;
+  read: () => Promise<ResourceReadResult>;
+};
+
+type RegisteredResourceTemplate = {
+  definition: ResourceTemplate;
+  match: (uri: string) => Record<string, unknown> | undefined;
+  read: (uri: string, variables: Record<string, unknown>) => Promise<ResourceReadResult>;
+};
+
 type ServerContext = {
   runtime: RuntimeConfig;
   notifier: NotifyingServer;
   tools: RegisteredTool[];
   toolMap: Map<string, RegisteredTool>;
   toolList: ToolListEntry[];
+  resources: Map<string, RegisteredResource>;
+  resourceList: Resource[];
+  resourceTemplateHandlers: RegisteredResourceTemplate[];
+  resourceTemplateList: ResourceTemplate[];
   logger: ReturnType<typeof createLogger>;
   session: SessionConfig;
   defaultConnectionId: string;
@@ -164,74 +186,48 @@ async function registerReferenceResources(server: Server, context: ServerContext
 
   const referenceDocumentMap = new Map(referenceDocuments.map(document => [document.slug, document]));
 
-  server.registerResource(
-    "configuration_guide",
-    configurationGuideUri,
-    {
+  const configurationGuideResource: RegisteredResource = {
+    definition: {
+      name: "configuration_guide",
       title: "ClickUp-MCP Configuration Guide",
+      uri: configurationGuideUri,
       description: "Deployment prerequisites, environment variables, and setup guidance.",
       mimeType: "text/markdown"
     },
-    async () => ({
-      contents: [
-        {
+    read: async () => {
+      const document = referenceDocumentMap.get("configuration-guide");
+      const text = await loadReferenceDocument(
+        document ?? {
+          slug: "configuration-guide",
           uri: configurationGuideUri,
-          text: await loadReferenceDocument(referenceDocumentMap.get("configuration-guide")!, context.logger)
-        }
-      ]
-    })
-  );
-
-  const referenceTemplate: ResourceTemplate = {
-    name: "clickup_reference_page",
-    title: "ClickUp Reference Page",
-    uriTemplate: "clickup-mcp://docs/reference/{slug}",
-    description: "Resolves ClickUp-MCP reference documentation by slug.",
-    mimeType: "text/markdown"
-  };
-
-  server.registerResource(
-    "fetch_clickup_reference_page",
-    referenceTemplate,
-    {
-      title: "Fetch ClickUp Reference Page",
-      description: "Retrieves a ClickUp-MCP reference document identified by slug.",
-      mimeType: "text/markdown"
-    },
-    async (_uri, variables: Record<string, unknown>) => {
-      const slug = String(variables.slug ?? "").toLowerCase();
-      const document = referenceDocumentMap.get(slug);
-      if (!document) {
-        context.logger.warn("reference_resource_missing", { slug });
-        return {
-          contents: [
-            {
-              uri: `clickup-mcp://docs/reference/${slug}`,
-              text: `No ClickUp-MCP reference page found for slug: ${slug}`
-            }
-          ]
-        };
-      }
+          title: "Setup and Configuration",
+          description: "Core environment configuration guidance for ClickUp-MCP.",
+          path: "../../docs/HANDBOOK.md",
+          mimeType: "text/markdown"
+        },
+        context.logger
+      );
       return {
         contents: [
           {
-            uri: document.uri,
-            text: await loadReferenceDocument(document, context.logger)
+            uri: configurationGuideUri,
+            text,
+            mimeType: "text/markdown"
           }
         ]
       };
     }
-  );
+  };
 
-  server.registerResource(
-    "list_clickup_reference_links",
-    referenceIndexUri,
-    {
+  const referenceIndexResource: RegisteredResource = {
+    definition: {
+      name: "list_clickup_reference_links",
       title: "ClickUp Reference Index",
+      uri: referenceIndexUri,
       description: "Index of ClickUp-MCP reference materials available as resources.",
       mimeType: "application/json"
     },
-    async () => {
+    read: async () => {
       const links = [
         ...referenceDocuments.map(document => ({
           name: document.slug,
@@ -252,6 +248,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
         contents: [
           {
             uri: referenceIndexUri,
+            mimeType: "application/json",
             json: {
               generatedAt: new Date().toISOString(),
               resources: links
@@ -260,20 +257,21 @@ async function registerReferenceResources(server: Server, context: ServerContext
         ]
       };
     }
-  );
+  };
 
-  server.registerResource(
-    "tool_reference",
-    toolReferenceUri,
-    {
+  const toolReferenceResource: RegisteredResource = {
+    definition: {
+      name: "tool_reference",
       title: "ClickUp-MCP Tool Reference",
+      uri: toolReferenceUri,
       description: "Metadata and JSON schemas for every registered tool.",
       mimeType: "application/json"
     },
-    async () => ({
+    read: async () => ({
       contents: [
         {
           uri: toolReferenceUri,
+          mimeType: "application/json",
           json: {
             generatedAt: new Date().toISOString(),
             tools: context.tools.map(tool => ({
@@ -287,16 +285,83 @@ async function registerReferenceResources(server: Server, context: ServerContext
         }
       ]
     })
-  );
+  };
+
+  const referenceTemplatePrefix = "clickup-mcp://docs/reference/";
+  const referenceTemplate: ResourceTemplate = {
+    name: "clickup_reference_page",
+    title: "ClickUp Reference Page",
+    uriTemplate: "clickup-mcp://docs/reference/{slug}",
+    description: "Resolves ClickUp-MCP reference documentation by slug.",
+    mimeType: "text/markdown"
+  };
+
+  const referenceTemplateRegistration: RegisteredResourceTemplate = {
+    definition: referenceTemplate,
+    match: uri => {
+      if (!uri.startsWith(referenceTemplatePrefix)) {
+        return undefined;
+      }
+      const slug = uri.slice(referenceTemplatePrefix.length).trim();
+      if (slug.length === 0) {
+        return { slug };
+      }
+      return { slug: slug.toLowerCase() };
+    },
+    read: async (uri, variables) => {
+      const slug = String(variables.slug ?? "").trim().toLowerCase();
+      if (!slug) {
+        context.logger.warn("reference_resource_missing", { slug });
+        return {
+          contents: [
+            {
+              uri,
+              text: "No ClickUp-MCP reference page found for slug: (empty)",
+              mimeType: "text/markdown"
+            }
+          ]
+        };
+      }
+      const document = referenceDocumentMap.get(slug);
+      if (!document) {
+        context.logger.warn("reference_resource_missing", { slug });
+        return {
+          contents: [
+            {
+              uri,
+              text: `No ClickUp-MCP reference page found for slug: ${slug}`,
+              mimeType: "text/markdown"
+            }
+          ]
+        };
+      }
+      return {
+        contents: [
+          {
+            uri: document.uri,
+            text: await loadReferenceDocument(document, context.logger),
+            mimeType: document.mimeType
+          }
+        ]
+      };
+    }
+  };
+
+  const registeredResources: RegisteredResource[] = [
+    configurationGuideResource,
+    referenceIndexResource,
+    toolReferenceResource
+  ];
+
+  context.resources = new Map(registeredResources.map(resource => [resource.definition.uri, resource]));
+  context.resourceList = registeredResources.map(resource => resource.definition);
+  context.resourceTemplateHandlers = [referenceTemplateRegistration];
+  context.resourceTemplateList = [referenceTemplateRegistration.definition];
 
   await server.sendResourceListChanged();
   context.logger.info("reference_resources_registered", {
-    resources: [
-      "configuration_guide",
-      "fetch_clickup_reference_page",
-      "list_clickup_reference_links",
-      "tool_reference"
-    ]
+    resources: context.resourceList.map(resource => resource.name),
+    resourceTemplates: context.resourceTemplateList.map(template => template.name)
   });
 }
 
@@ -374,6 +439,10 @@ export async function createServer(
     tools: [],
     toolMap: new Map(),
     toolList: [],
+    resources: new Map(),
+    resourceList: [],
+    resourceTemplateHandlers: [],
+    resourceTemplateList: [],
     logger,
     session: sessionConfig,
     defaultConnectionId,
@@ -411,6 +480,45 @@ export async function createServer(
     await registerReferenceResources(server, context);
   })();
   context.ready = ready;
+  server.setRequestHandler(ListResourcesRequestSchema, async () =>
+    withSessionScope(buildSessionScope(sessionConfig, defaultConnectionId), () =>
+      withCorrelationId(newCorrelationId(), async () => {
+        await ready;
+        logger.info("list_resources_requested");
+        return { resources: context.resourceList };
+      })
+    )
+  );
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () =>
+    withSessionScope(buildSessionScope(sessionConfig, defaultConnectionId), () =>
+      withCorrelationId(newCorrelationId(), async () => {
+        await ready;
+        logger.info("list_resource_templates_requested");
+        return { resourceTemplates: context.resourceTemplateList };
+      })
+    )
+  );
+  server.setRequestHandler(ReadResourceRequestSchema, async request =>
+    withSessionScope(buildSessionScope(sessionConfig, defaultConnectionId), () =>
+      withCorrelationId(newCorrelationId(), async () => {
+        await ready;
+        const uri = request.params.uri;
+        logger.info("resource_read_requested", { uri });
+        const resource = context.resources.get(uri);
+        if (resource) {
+          return resource.read();
+        }
+        for (const template of context.resourceTemplateHandlers) {
+          const variables = template.match(uri);
+          if (variables) {
+            return template.read(uri, variables);
+          }
+        }
+        logger.warn("resource_missing", { uri });
+        throw new McpError(ErrorCode.InvalidParams, `Resource ${uri} not found`);
+      })
+    )
+  );
   server.setRequestHandler(ListToolsRequestSchema, async () =>
     withSessionScope(buildSessionScope(sessionConfig, defaultConnectionId), () =>
       withCorrelationId(newCorrelationId(), async () => {
