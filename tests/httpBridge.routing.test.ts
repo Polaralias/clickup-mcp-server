@@ -43,11 +43,19 @@ describe("http bridge routing", () => {
         })
       });
       expect(initialize.status).toBe(200);
+      const sessionId = initialize.headers.get("mcp-session-id");
+      expect(sessionId).toBeTruthy();
+      const negotiatedProtocol =
+        initialize.headers.get("mcp-protocol-version") ?? "2024-11-05";
       await initialize.text();
 
       const stream = await fetch(baseUrl, {
         method: "GET",
-        headers: { Accept: "text/event-stream" }
+        headers: {
+          Accept: "text/event-stream",
+          "MCP-Session-Id": sessionId ?? "",
+          "MCP-Protocol-Version": negotiatedProtocol
+        }
       });
       expect(stream.status).toBe(200);
       expect(stream.headers.get("content-type") ?? "").toContain("text/event-stream");
@@ -69,9 +77,34 @@ describe("http bridge routing", () => {
         Accept: "application/json, text/event-stream"
       } satisfies Record<string, string>;
 
-      const response = await fetch(baseUrl, {
+      const initialise = await fetch(baseUrl, {
         method: "POST",
         headers,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "init",
+          method: "initialize",
+          params: {
+            protocolVersion: "2024-11-05",
+            capabilities: {},
+            clientInfo: { name: "routing-test", version: "1.0.0" }
+          }
+        })
+      });
+      expect(initialise.status).toBe(200);
+      const sessionId = initialise.headers.get("mcp-session-id");
+      expect(sessionId).toBeTruthy();
+      const negotiatedProtocol =
+        initialise.headers.get("mcp-protocol-version") ?? "2024-11-05";
+      await initialise.text();
+
+      const response = await fetch(baseUrl, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "MCP-Session-Id": sessionId ?? "",
+          "MCP-Protocol-Version": negotiatedProtocol
+        },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "list",

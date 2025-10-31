@@ -3,6 +3,7 @@ import express from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { AddressInfo } from "node:net";
+import { randomUUID } from "node:crypto";
 import type { HttpTransportConfig } from "../config/runtime.js";
 import { PROJECT_NAME } from "../config/constants.js";
 import { PACKAGE_VERSION } from "../shared/version.js";
@@ -160,6 +161,20 @@ export async function startHttpBridge(
   app.use(createRequestLogger("http.server"));
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+    enableJsonResponse: httpConfig?.enableJsonResponse ?? true,
+    allowedHosts: httpConfig?.allowedHosts,
+    allowedOrigins: httpConfig?.allowedOrigins,
+    enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false
+  });
+  transport.onerror = error => {
+    const reason = error instanceof Error ? error.message : String(error);
+    context.logger.error("http_transport_error", { reason });
+  };
+  applyTransportObservers(transport, createJsonRpcLogger("http.rpc"));
+  await server.connect(transport);
+
   for (const path of MCP_PATHS) {
     app.options(path, (_req, res) => {
       res.status(204).end();
@@ -189,27 +204,11 @@ export async function startHttpBridge(
         return;
       }
 
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: httpConfig?.enableJsonResponse ?? true,
-        allowedHosts: httpConfig?.allowedHosts,
-        allowedOrigins: httpConfig?.allowedOrigins,
-        enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false
-      });
-      transport.onerror = error => {
-        const reason = error instanceof Error ? error.message : String(error);
-        context.logger.error("http_transport_error", { reason });
-      };
-      applyTransportObservers(transport, createJsonRpcLogger("http.rpc"));
-      res.on("close", () => {
-        void transport.close();
-      });
       try {
         const parsedBody = req.method === "POST" ? req.body : undefined;
         if (req.method === "POST") {
           ensureAcceptHeader(req);
         }
-        await server.connect(transport);
         await transport.handleRequest(req, res, parsedBody);
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
@@ -249,8 +248,8 @@ export async function startHttpBridge(
     });
   });
 
-  const close = async () =>
-    new Promise<void>((resolve, reject) => {
+  const close = async () => {
+    await new Promise<void>((resolve, reject) => {
       serverInstance.close(error => {
         if (error) {
           reject(error);
@@ -259,6 +258,8 @@ export async function startHttpBridge(
         resolve();
       });
     });
+    await transport.close();
+  };
 
   return { port: actualPort, close };
 }
