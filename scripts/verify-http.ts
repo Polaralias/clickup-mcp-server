@@ -13,7 +13,7 @@ async function runCurl(url: string, payload: Record<string, unknown>): Promise<{
     "-H",
     "Content-Type: application/json",
     "-H",
-    "Accept: application/json",
+    "Accept: application/json, text/event-stream",
     "-d",
     JSON.stringify(payload),
     url
@@ -49,6 +49,8 @@ async function main(): Promise<void> {
     await waitForServerReady(server);
 
     const baseUrl = `http://127.0.0.1:${http.port}/mcp`;
+    const rootUrl = `http://127.0.0.1:${http.port}/`;
+
     const initializeResponse = await runCurl(baseUrl, {
       jsonrpc: "2.0",
       id: "1",
@@ -102,6 +104,28 @@ async function main(): Promise<void> {
       (Array.isArray(fallbackContent) ? fallbackContent[0]?.text : undefined);
     if (echoed !== "verification") {
       throw new Error("ping tool did not echo input text");
+    }
+
+    const streamResponse = await fetch(baseUrl, {
+      method: "GET",
+      headers: { Accept: "text/event-stream" }
+    });
+    if (streamResponse.status !== 200) {
+      throw new Error(`GET /mcp returned HTTP ${streamResponse.status}`);
+    }
+    const streamContentType = streamResponse.headers.get("content-type") ?? "";
+    if (!streamContentType.includes("text/event-stream")) {
+      throw new Error("GET /mcp did not negotiate text/event-stream");
+    }
+    await streamResponse.body?.cancel();
+
+    const rootResponse = await runCurl(rootUrl, {
+      jsonrpc: "2.0",
+      id: "4",
+      method: "tools/list"
+    });
+    if (rootResponse.status !== 200) {
+      throw new Error(`root path POST returned HTTP ${rootResponse.status}`);
     }
   } finally {
     await http.close();

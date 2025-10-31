@@ -4,7 +4,7 @@ This directory contains minimal reference implementations that mirror the transp
 
 ## Streamable HTTP
 
-`examples/basic/streamableHttp.ts` starts an Express application with a single `POST /mcp` endpoint. The server registers a `ping` tool and a `hello://world` resource so clients can exercise both discovery and invocation paths.
+`examples/basic/streamableHttp.ts` starts an Express application that exposes Streamable HTTP on both `/mcp` and `/`. It supports `POST` for JSON-RPC requests plus `GET` and `DELETE` for session management, matching Smithery's expectations. The server registers a `ping` tool and a `hello://world` resource so clients can exercise both discovery and invocation paths.
 
 Run it with:
 

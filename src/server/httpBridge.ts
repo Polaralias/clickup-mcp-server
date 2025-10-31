@@ -9,7 +9,7 @@ import { PACKAGE_VERSION } from "../shared/version.js";
 import { getServerContext } from "./factory.js";
 
 const JSON_BODY_LIMIT = "1mb";
-const MCP_PATH = "/mcp";
+const MCP_PATHS = ["/mcp", "/"] as const;
 const HEALTH_PATH = "/healthz";
 const REQUIRED_ACCEPT_TYPES = ["application/json", "text/event-stream"] as const;
 
@@ -160,9 +160,11 @@ export async function startHttpBridge(
   app.use(createRequestLogger("http.server"));
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
-  app.options(MCP_PATH, (_req, res) => {
-    res.status(204).end();
-  });
+  for (const path of MCP_PATHS) {
+    app.options(path, (_req, res) => {
+      res.status(204).end();
+    });
+  }
 
   app.get(HEALTH_PATH, (_req, res) => {
     res.json({
@@ -174,40 +176,56 @@ export async function startHttpBridge(
     });
   });
 
-  app.post(MCP_PATH, async (req, res) => {
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: httpConfig?.enableJsonResponse ?? true,
-      allowedHosts: httpConfig?.allowedHosts,
-      allowedOrigins: httpConfig?.allowedOrigins,
-      enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false
-    });
-    transport.onerror = error => {
-      const reason = error instanceof Error ? error.message : String(error);
-      context.logger.error("http_transport_error", { reason });
-    };
-    applyTransportObservers(transport, createJsonRpcLogger("http.rpc"));
-    res.on("close", () => {
-      void transport.close();
-    });
-    try {
-      ensureAcceptHeader(req);
-      await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      context.logger.error("http_request_failed", {
-        reason,
-        method: req.method,
-        path: req.path
+  const supportedMethods = new Set(["POST", "GET", "DELETE"]);
+
+  for (const path of MCP_PATHS) {
+    app.all(path, async (req, res) => {
+      if (!supportedMethods.has(req.method)) {
+        respondWithJson(res, 405, {
+          jsonrpc: "2.0",
+          error: { code: -32601, message: "Method Not Allowed" },
+          id: null
+        });
+        return;
+      }
+
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: httpConfig?.enableJsonResponse ?? true,
+        allowedHosts: httpConfig?.allowedHosts,
+        allowedOrigins: httpConfig?.allowedOrigins,
+        enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false
       });
-      respondWithJson(res, 500, {
-        jsonrpc: "2.0",
-        error: { code: -32603, message: "Internal Server Error" },
-        id: null
+      transport.onerror = error => {
+        const reason = error instanceof Error ? error.message : String(error);
+        context.logger.error("http_transport_error", { reason });
+      };
+      applyTransportObservers(transport, createJsonRpcLogger("http.rpc"));
+      res.on("close", () => {
+        void transport.close();
       });
-    }
-  });
+      try {
+        const parsedBody = req.method === "POST" ? req.body : undefined;
+        if (req.method === "POST") {
+          ensureAcceptHeader(req);
+        }
+        await server.connect(transport);
+        await transport.handleRequest(req, res, parsedBody);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        context.logger.error("http_request_failed", {
+          reason,
+          method: req.method,
+          path: req.path
+        });
+        respondWithJson(res, 500, {
+          jsonrpc: "2.0",
+          error: { code: -32603, message: "Internal Server Error" },
+          id: null
+        });
+      }
+    });
+  }
 
   app.use((req, res) => {
     respondWithJson(res, 404, { error: "Not Found" });
