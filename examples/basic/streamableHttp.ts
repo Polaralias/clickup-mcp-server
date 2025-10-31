@@ -31,14 +31,34 @@ server.registerResource(
 const app = express();
 app.use(express.json());
 
-app.post("/mcp", async (req, res) => {
-  const transport = new StreamableHTTPServerTransport({ enableJsonResponse: true });
-  res.on("close", () => {
-    void transport.close();
+const paths = ["/mcp", "/"] as const;
+const methods = new Set(["POST", "GET", "DELETE"]);
+
+for (const path of paths) {
+  app.options(path, (_req, res) => {
+    res.status(204).end();
   });
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
-});
+
+  app.all(path, async (req, res) => {
+    if (!methods.has(req.method)) {
+      res.status(405).json({
+        jsonrpc: "2.0",
+        error: { code: -32601, message: "Method Not Allowed" },
+        id: null
+      });
+      return;
+    }
+
+    const transport = new StreamableHTTPServerTransport({ enableJsonResponse: true });
+    res.on("close", () => {
+      void transport.close();
+    });
+
+    const parsedBody = req.method === "POST" ? req.body : undefined;
+    await server.connect(transport);
+    await transport.handleRequest(req, res, parsedBody);
+  });
+}
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 app.listen(port, () => {
