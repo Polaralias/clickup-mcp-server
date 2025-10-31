@@ -161,19 +161,56 @@ export async function startHttpBridge(
   app.use(createRequestLogger("http.server"));
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-    enableJsonResponse: httpConfig?.enableJsonResponse ?? true,
-    allowedHosts: httpConfig?.allowedHosts,
-    allowedOrigins: httpConfig?.allowedOrigins,
-    enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false
-  });
-  transport.onerror = error => {
-    const reason = error instanceof Error ? error.message : String(error);
-    context.logger.error("http_transport_error", { reason });
+  const activeTransports = new Set<StreamableHTTPServerTransport>();
+  const sessionTransports = new Map<string, StreamableHTTPServerTransport>();
+
+  const createTransport = async () => {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      enableJsonResponse: httpConfig?.enableJsonResponse ?? true,
+      allowedHosts: httpConfig?.allowedHosts,
+      allowedOrigins: httpConfig?.allowedOrigins,
+      enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false,
+      onsessioninitialized: sessionId => {
+        if (!sessionId) {
+          return;
+        }
+        sessionTransports.set(sessionId, transport);
+      },
+      onsessionclosed: sessionId => {
+        if (sessionId) {
+          sessionTransports.delete(sessionId);
+        }
+        activeTransports.delete(transport);
+      }
+    });
+    transport.onerror = error => {
+      const reason = error instanceof Error ? error.message : String(error);
+      context.logger.error("http_transport_error", { reason });
+    };
+    applyTransportObservers(transport, createJsonRpcLogger("http.rpc"));
+    activeTransports.add(transport);
+    await server.connect(transport);
+    return transport;
   };
-  applyTransportObservers(transport, createJsonRpcLogger("http.rpc"));
-  await server.connect(transport);
+
+  const getSessionId = (req: Request): { sessionId?: string; errorStatus?: number; errorBody?: unknown } => {
+    const header = req.headers["mcp-session-id"];
+    if (header === undefined) {
+      return {};
+    }
+    if (Array.isArray(header)) {
+      return {
+        errorStatus: 400,
+        errorBody: {
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Bad Request: Mcp-Session-Id header must be a single value" },
+          id: null
+        }
+      };
+    }
+    return { sessionId: header };
+  };
 
   for (const path of MCP_PATHS) {
     app.options(path, (_req, res) => {
@@ -209,7 +246,39 @@ export async function startHttpBridge(
         if (req.method === "POST") {
           ensureAcceptHeader(req);
         }
-        await transport.handleRequest(req, res, parsedBody);
+        const { sessionId, errorStatus, errorBody } = getSessionId(req);
+        if (errorStatus !== undefined) {
+          respondWithJson(res, errorStatus, errorBody);
+          return;
+        }
+        let transport: StreamableHTTPServerTransport;
+        let isNewTransport = false;
+        if (sessionId) {
+          const existing = sessionTransports.get(sessionId);
+          if (!existing) {
+            respondWithJson(res, 404, {
+              jsonrpc: "2.0",
+              error: { code: -32001, message: "Session not found" },
+              id: null
+            });
+            return;
+          }
+          transport = existing;
+        } else {
+          transport = await createTransport();
+          isNewTransport = true;
+        }
+        try {
+          await transport.handleRequest(req, res, parsedBody);
+        } finally {
+          if (isNewTransport) {
+            const session = transport.sessionId;
+            const isRegistered = session !== undefined && sessionTransports.get(session) === transport;
+            if (!isRegistered && activeTransports.delete(transport)) {
+              await transport.close();
+            }
+          }
+        }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         context.logger.error("http_request_failed", {
@@ -258,7 +327,16 @@ export async function startHttpBridge(
         resolve();
       });
     });
-    await transport.close();
+    const transports = Array.from(activeTransports);
+    activeTransports.clear();
+    await Promise.all(
+      transports.map(async transport => {
+        if (transport.sessionId !== undefined && sessionTransports.get(transport.sessionId) === transport) {
+          sessionTransports.delete(transport.sessionId);
+        }
+        await transport.close();
+      })
+    );
   };
 
   return { port: actualPort, close };
