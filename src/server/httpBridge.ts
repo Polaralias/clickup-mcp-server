@@ -13,6 +13,7 @@ const JSON_BODY_LIMIT = "1mb";
 const MCP_PATHS = ["/mcp", "/"] as const;
 const HEALTH_PATH = "/healthz";
 const REQUIRED_ACCEPT_TYPES = ["application/json", "text/event-stream"] as const;
+const SESSION_IDLE_TIMEOUT_MS = 60_000;
 
 function isDebugEnabled(): boolean {
   const value = process.env.MCP_DEBUG ?? "";
@@ -163,6 +164,60 @@ export async function startHttpBridge(
 
   const activeTransports = new Set<StreamableHTTPServerTransport>();
   const sessionTransports = new Map<string, StreamableHTTPServerTransport>();
+  const transportIdleTimers = new Map<StreamableHTTPServerTransport, ReturnType<typeof setTimeout>>();
+
+  const clearIdleTimer = (transport: StreamableHTTPServerTransport) => {
+    const timer = transportIdleTimers.get(transport);
+    if (timer) {
+      clearTimeout(timer);
+      transportIdleTimers.delete(transport);
+    }
+  };
+
+  const unregisterTransport = (transport: StreamableHTTPServerTransport) => {
+    clearIdleTimer(transport);
+    const sessionId = transport.sessionId;
+    if (sessionId !== undefined && sessionTransports.get(sessionId) === transport) {
+      sessionTransports.delete(sessionId);
+    }
+    activeTransports.delete(transport);
+  };
+
+  const disposeTransport = async (transport: StreamableHTTPServerTransport, reason: string) => {
+    const isActive = activeTransports.has(transport);
+    unregisterTransport(transport);
+    if (!isActive) {
+      return;
+    }
+    try {
+      await transport.close();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      context.logger.error("http_transport_close_failed", { reason, error: message });
+    }
+  };
+
+  const scheduleIdleCleanup = (transport: StreamableHTTPServerTransport) => {
+    if (SESSION_IDLE_TIMEOUT_MS <= 0) {
+      return;
+    }
+    clearIdleTimer(transport);
+    if (!activeTransports.has(transport)) {
+      return;
+    }
+    const timeout = setTimeout(() => {
+      transportIdleTimers.delete(transport);
+      if (!activeTransports.has(transport)) {
+        unregisterTransport(transport);
+        return;
+      }
+      void disposeTransport(transport, "idle_timeout");
+    }, SESSION_IDLE_TIMEOUT_MS);
+    if (typeof timeout.unref === "function") {
+      timeout.unref();
+    }
+    transportIdleTimers.set(transport, timeout);
+  };
 
   const createTransport = async () => {
     const transport = new StreamableHTTPServerTransport({
@@ -176,20 +231,25 @@ export async function startHttpBridge(
           return;
         }
         sessionTransports.set(sessionId, transport);
+        scheduleIdleCleanup(transport);
       },
       onsessionclosed: sessionId => {
         if (sessionId) {
           sessionTransports.delete(sessionId);
         }
-        activeTransports.delete(transport);
+        unregisterTransport(transport);
       }
     });
     transport.onerror = error => {
       const reason = error instanceof Error ? error.message : String(error);
       context.logger.error("http_transport_error", { reason });
     };
+    transport.onclose = () => {
+      unregisterTransport(transport);
+    };
     applyTransportObservers(transport, createJsonRpcLogger("http.rpc"));
     activeTransports.add(transport);
+    scheduleIdleCleanup(transport);
     await server.connect(transport);
     return transport;
   };
@@ -269,14 +329,18 @@ export async function startHttpBridge(
           isNewTransport = true;
         }
         try {
+          clearIdleTimer(transport);
           await transport.handleRequest(req, res, parsedBody);
         } finally {
           if (isNewTransport) {
             const session = transport.sessionId;
             const isRegistered = session !== undefined && sessionTransports.get(session) === transport;
-            if (!isRegistered && activeTransports.delete(transport)) {
-              await transport.close();
+            if (!isRegistered) {
+              await disposeTransport(transport, "uninitialised_session");
             }
+          }
+          if (activeTransports.has(transport)) {
+            scheduleIdleCleanup(transport);
           }
         }
       } catch (error) {
@@ -328,15 +392,7 @@ export async function startHttpBridge(
       });
     });
     const transports = Array.from(activeTransports);
-    activeTransports.clear();
-    await Promise.all(
-      transports.map(async transport => {
-        if (transport.sessionId !== undefined && sessionTransports.get(transport.sessionId) === transport) {
-          sessionTransports.delete(transport.sessionId);
-        }
-        await transport.close();
-      })
-    );
+    await Promise.all(transports.map(transport => disposeTransport(transport, "shutdown")));
   };
 
   return { port: actualPort, close };
