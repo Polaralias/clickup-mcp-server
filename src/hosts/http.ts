@@ -43,6 +43,7 @@ async function start(): Promise<void> {
   const { host, port } = resolveListenConfig();
 
   let shuttingDown = false;
+  let stopHttp: (() => Promise<void>) | undefined;
   const shutdown = async (signal?: NodeJS.Signals) => {
     if (shuttingDown) {
       return;
@@ -50,6 +51,9 @@ async function start(): Promise<void> {
     shuttingDown = true;
     logInfo("bootstrap", "shutdown_begin", signal ? { signal } : undefined);
     try {
+      if (stopHttp) {
+        await stopHttp();
+      }
       await server.close();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -70,7 +74,9 @@ async function start(): Promise<void> {
   });
 
   try {
-    const actualPort = await startHttpBridge(server, { port, host });
+    const httpServer = await startHttpBridge(server, { port, host });
+    stopHttp = httpServer.close;
+    const actualPort = httpServer.port;
     await waitForServerReady(server);
     await context.notifier.notify("tools/list_changed", { tools: context.toolList });
     logInfo("bootstrap", "http_ready", {

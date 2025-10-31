@@ -1,4 +1,5 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -8,6 +9,7 @@ import {
   type ResourceTemplate
 } from "@modelcontextprotocol/sdk/types.js";
 import { readFile } from "node:fs/promises";
+import { URL } from "node:url";
 import { loadRuntimeConfig, type RuntimeConfig } from "../config/runtime.js";
 import { PROJECT_NAME } from "../config/constants.js";
 import { registerTools, type RegisteredTool } from "../mcp/tools/registerTools.js";
@@ -48,6 +50,7 @@ type ToolListEntry = {
 type NotifyingServer = Server & { notify: (method: string, params: unknown) => Promise<void> };
 
 type ServerContext = {
+  mcp: McpServer;
   runtime: RuntimeConfig;
   notifier: NotifyingServer;
   tools: RegisteredTool[];
@@ -68,6 +71,13 @@ type ReferenceDocument = {
   mimeType: string;
   extract?: (markdown: string) => string;
 };
+
+function isNotConnectedError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message.toLowerCase().includes("not connected");
+}
 
 function ensureGatewayPatched(): void {
   if (gatewayPatched) {
@@ -129,13 +139,8 @@ async function loadReferenceDocument(document: ReferenceDocument, logger: Return
   }
 }
 
-async function registerReferenceResources(server: Server, context: ServerContext): Promise<void> {
-  if (typeof (server as Server & { registerResource?: unknown }).registerResource !== "function") {
-    context.logger.warn("reference_resources_unsupported", {
-      message: "MCP SDK does not expose registerResource; skipping reference resource registration"
-    });
-    return;
-  }
+async function registerReferenceResources(context: ServerContext): Promise<void> {
+  const { mcp, logger } = context;
 
   type ResourceHandlerResult = {
     contents: (
@@ -143,15 +148,6 @@ async function registerReferenceResources(server: Server, context: ServerContext
       | { uri: string; json: unknown }
     )[];
   };
-
-  type RegisterResourceFn = (
-    name: string,
-    uri: string | ResourceTemplate,
-    config: { title: string; description: string; mimeType: string },
-    handler: (...args: unknown[]) => Promise<ResourceHandlerResult>
-  ) => void;
-
-  const registerResource = (server as Server & { registerResource: RegisterResourceFn }).registerResource;
 
   const configurationGuideUri = "clickup-mcp://docs/configuration-guide";
   const referenceIndexUri = "clickup-mcp://docs/reference-index";
@@ -187,7 +183,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
 
   const referenceDocumentMap = new Map(referenceDocuments.map(document => [document.slug, document]));
 
-  registerResource(
+  context.mcp.registerResource(
     "configuration_guide",
     configurationGuideUri,
     {
@@ -199,7 +195,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
       contents: [
         {
           uri: configurationGuideUri,
-          text: await loadReferenceDocument(referenceDocumentMap.get("configuration-guide")!, context.logger)
+          text: await loadReferenceDocument(referenceDocumentMap.get("configuration-guide")!, logger)
         }
       ]
     })
@@ -213,7 +209,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
     mimeType: "text/markdown"
   };
 
-  registerResource(
+  context.mcp.registerResource(
     "fetch_clickup_reference_page",
     referenceTemplate,
     {
@@ -226,7 +222,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
       const slug = String(variables.slug ?? "").toLowerCase();
       const document = referenceDocumentMap.get(slug);
       if (!document) {
-        context.logger.warn("reference_resource_missing", { slug });
+        logger.warn("reference_resource_missing", { slug });
         return {
           contents: [
             {
@@ -240,14 +236,14 @@ async function registerReferenceResources(server: Server, context: ServerContext
         contents: [
           {
             uri: document.uri,
-            text: await loadReferenceDocument(document, context.logger)
+          text: await loadReferenceDocument(document, logger)
           }
         ]
       };
     }
   );
 
-  registerResource(
+  context.mcp.registerResource(
     "list_clickup_reference_links",
     referenceIndexUri,
     {
@@ -286,7 +282,7 @@ async function registerReferenceResources(server: Server, context: ServerContext
     }
   );
 
-  registerResource(
+  context.mcp.registerResource(
     "tool_reference",
     toolReferenceUri,
     {
@@ -313,13 +309,44 @@ async function registerReferenceResources(server: Server, context: ServerContext
     })
   );
 
-  await server.sendResourceListChanged();
-  context.logger.info("reference_resources_registered", {
+  context.mcp.registerResource(
+    "hello",
+    "hello://world",
+    {
+      title: "Hello",
+      description: "Minimal transport verification resource",
+      mimeType: "text/plain"
+    },
+    async (...args: unknown[]) => {
+      const first = args[0];
+      const target = first instanceof URL ? first : new URL("hello://world");
+      return {
+        contents: [
+          {
+            uri: target.href,
+            text: "hello world"
+          }
+        ]
+      };
+    }
+  );
+
+  try {
+    await context.mcp.server.sendResourceListChanged();
+  } catch (error) {
+    if (isNotConnectedError(error)) {
+      logger.debug("resource_list_notification_skipped", { reason: "not_connected" });
+    } else {
+      throw error;
+    }
+  }
+  logger.info("reference_resources_registered", {
     resources: [
       "configuration_guide",
       "fetch_clickup_reference_page",
       "list_clickup_reference_links",
-      "tool_reference"
+      "tool_reference",
+      "hello"
     ]
   });
 }
@@ -338,12 +365,20 @@ async function executeTool(
   }
 }
 
-function attachNotify(server: Server): NotifyingServer {
+function attachNotify(server: Server, logger: ReturnType<typeof createLogger>): NotifyingServer {
   const target = server as NotifyingServer;
   if (typeof target.notify !== "function") {
     target.notify = async (method: string, params: unknown) => {
       const normalised = method.startsWith("notifications/") ? method : `notifications/${method}`;
-      await server.notification({ method: normalised, params: params as Record<string, unknown> });
+      try {
+        await server.notification({ method: normalised, params: params as Record<string, unknown> });
+      } catch (error) {
+        if (isNotConnectedError(error)) {
+          logger.debug("notification_skipped", { method: normalised, reason: "not_connected" });
+          return;
+        }
+        throw error;
+      }
     };
   }
   return target;
@@ -397,7 +432,8 @@ export async function createServer(
   const validation = validateConfig(resolved);
   const runtime = loadRuntimeConfig();
   configureLogging({ level: runtime.logLevel });
-  const server = new Server({ name: PROJECT_NAME, version: PACKAGE_VERSION });
+  const mcp = new McpServer({ name: PROJECT_NAME, version: PACKAGE_VERSION });
+  const server = mcp.server;
   const defaultInitialize = (
     server as unknown as { _oninitialize: (request: unknown) => Promise<unknown> }
   )._oninitialize.bind(server) as (request: unknown) => Promise<unknown>;
@@ -412,14 +448,15 @@ export async function createServer(
   const schemaConfig = toSchemaConfig(resolved);
   const sessionConfig = toSessionConfig(schemaConfig);
   const defaultConnectionId = "smithery";
-  const notifier = attachNotify(server);
   const logger = createLogger("mcp.server");
+  const notifier = attachNotify(server, logger);
   if (sessionConfig.apiToken.trim().length === 0) {
     logger.warn("session_missing_token", {
       message: "ClickUp API token not provided; most tools will fail until a token is supplied."
     });
   }
   const context: ServerContext = {
+    mcp,
     runtime,
     notifier,
     tools: [],
@@ -459,7 +496,7 @@ export async function createServer(
     context.tools = tools;
     context.toolMap = new Map<string, RegisteredTool>(tools.map(tool => [tool.name, tool]));
     context.toolList = buildToolList(tools);
-    await registerReferenceResources(server, context);
+    await registerReferenceResources(context);
   })();
   context.ready = ready;
   server.setRequestHandler(InitializeRequestSchema, request =>
