@@ -918,6 +918,39 @@ export const healthTool: RegisteredTool<HealthPayload> = {
   requiresAuth: false
 };
 
+const pingInputSchema = z.object({
+  text: z.string().min(1)
+});
+
+const pingInputJsonSchema = {
+  type: "object",
+  properties: {
+    text: { type: "string", minLength: 1 }
+  },
+  required: ["text"],
+  additionalProperties: false
+};
+
+type PingPayload = { content: { type: "text"; text: string }[] };
+
+async function executePing(input: unknown): Promise<Result<PingPayload>> {
+  const parsed = pingInputSchema.safeParse(input ?? {});
+  if (!parsed.success) {
+    return err("INVALID_PARAMETER", "Invalid parameters", parsed.error.flatten());
+  }
+  return ok({ content: [{ type: "text", text: parsed.data.text }] });
+}
+
+const pingTool: RegisteredTool<PingPayload> = {
+  name: "ping",
+  description: "Echo the provided text payload",
+  annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false },
+  inputSchema: pingInputSchema,
+  inputJsonSchema: pingInputJsonSchema,
+  execute: executePing,
+  requiresAuth: false
+};
+
 export async function registerTools(
   server: McpServer,
   runtime: RuntimeConfig,
@@ -970,6 +1003,7 @@ export async function registerTools(
     return normalised;
   };
   register(healthTool);
+  register(pingTool);
   const docTool: RegisteredTool<DocSearchOutputType> = {
     name: "clickup_doc_search",
     description: "Search ClickUp Docs by query with pagination and optional inline page expansion",

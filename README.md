@@ -22,6 +22,13 @@ Run in development mode:
 npm run dev
 ```
 
+The project now exposes dedicated launchers for each transport so you can iterate locally without touching the main entrypoint:
+
+```sh
+npm run dev:stdio
+npm run dev:http
+```
+
 Run tests:
 
 ```
@@ -57,6 +64,28 @@ curl -s http://127.0.0.1:8081/healthz
 curl -s -X POST http://127.0.0.1:8081/ -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.1"}}}'
 curl -s -X POST http://127.0.0.1:8081/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
+
+`MCP_DEBUG=1` enables structured HTTP request logs and JSON-RPC traces. Toggle it off (set to `0`) to keep the bridge quiet during automated runs.
+
+## Smithery quick-start
+
+Smithery talks to ClickUp-MCP-Server over Streamable HTTP. Use the provided dev script to run the bridge with the same Express entrypoint that Smithery expects:
+
+```sh
+npm run dev:http
+```
+
+From another terminal, exercise the end-to-end handshake, tool listing, and ping tool that Smithery relies on:
+
+```sh
+npm run verify:http             # raw JSON-RPC via curl
+npm run verify:inspector:http   # MCP Inspector exercising HTTP transport
+npm run verify:smithery         # Smithery-compatible client calling ping and reading the hello://world resource
+```
+
+All three checks connect to `POST /mcp`, confirm the server advertises the `ping` tool and `hello://world` resource, and execute a ping round-trip.
+
+When publishing a Smithery build, point the configuration at the Streamable HTTP endpoint (`http://<host>:<port>/mcp`) or run the stdio entrypoint (`npm run dev:stdio`) if you prefer the default transport. The examples under `examples/basic/` mirror both launch modes and are safe to copy into a Smithery project.
 
 ## Deploying with Smithery
 

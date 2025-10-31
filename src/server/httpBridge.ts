@@ -1,85 +1,45 @@
+import type { Request, Response, NextFunction } from "express";
+import express from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import {
-  createServer as createHttpServer,
-  type IncomingMessage,
-  type ServerResponse
-} from "node:http";
 import type { AddressInfo } from "node:net";
-import { URL } from "node:url";
 import type { HttpTransportConfig } from "../config/runtime.js";
+import { PROJECT_NAME } from "../config/constants.js";
+import { PACKAGE_VERSION } from "../shared/version.js";
 import { getServerContext } from "./factory.js";
 
-const SUPPORTED_PATHS = new Set(["/", "/mcp"]);
+const JSON_BODY_LIMIT = "1mb";
+const MCP_PATH = "/mcp";
 const HEALTH_PATH = "/healthz";
 const REQUIRED_ACCEPT_TYPES = ["application/json", "text/event-stream"] as const;
 
-function parseUrl(raw: string | undefined): URL {
-  return new URL(raw ?? "", "http://localhost");
-}
-
-function debugEnabled(): boolean {
+function isDebugEnabled(): boolean {
   const value = process.env.MCP_DEBUG ?? "";
   if (!value) {
     return false;
   }
-  const normalised = value.toLowerCase();
+  const normalised = value.trim().toLowerCase();
   return normalised !== "0" && normalised !== "false";
 }
 
-function applyCors(response: ServerResponse, config?: HttpTransportConfig): void {
-  const allowOrigin = config?.corsAllowOrigin ?? "*";
-  const allowHeaders = config?.corsAllowHeaders ?? "Content-Type, MCP-Session-Id, MCP-Protocol-Version";
-  const allowMethods = config?.corsAllowMethods ?? "GET,POST,DELETE,OPTIONS";
-  response.setHeader("Access-Control-Allow-Origin", allowOrigin);
-  response.setHeader("Access-Control-Allow-Headers", allowHeaders);
-  response.setHeader("Access-Control-Allow-Methods", allowMethods);
-}
-
-function writeJson(response: ServerResponse, status: number, body: unknown): void {
-  if (!response.headersSent) {
-    response.writeHead(status, { "Content-Type": "application/json" });
-  }
-  response.end(JSON.stringify(body));
-}
-
-function collectAcceptSegments(value: string | string[] | undefined): string[] {
-  if (!value) {
-    return [];
-  }
-  const source = Array.isArray(value) ? value : [value];
-  const segments: string[] = [];
-  for (const entry of source) {
-    if (!entry) {
-      continue;
-    }
-    for (const segment of entry.split(",")) {
-      const trimmed = segment.trim();
-      if (trimmed) {
-        segments.push(trimmed);
-      }
-    }
-  }
-  return segments;
-}
-
-function baseMediaType(value: string): string | undefined {
-  const [type] = value.split(";");
-  const trimmed = type?.trim().toLowerCase();
-  return trimmed && trimmed.length > 0 ? trimmed : undefined;
-}
-
 export function normaliseAcceptHeader(value: string | string[] | undefined): string {
-  const segments = collectAcceptSegments(value);
-  const result: string[] = [];
+  if (!value) {
+    return REQUIRED_ACCEPT_TYPES.join(", ");
+  }
+  const items = Array.isArray(value) ? value : value.split(",");
   const seen = new Set<string>();
-  for (const segment of segments) {
-    const mediaType = baseMediaType(segment);
-    if (!mediaType || seen.has(mediaType)) {
+  const result: string[] = [];
+  for (const item of items) {
+    const trimmed = item.trim();
+    if (!trimmed) {
       continue;
     }
-    seen.add(mediaType);
-    result.push(segment);
+    const base = trimmed.split(";")[0]?.trim().toLowerCase();
+    if (!base || seen.has(base)) {
+      continue;
+    }
+    seen.add(base);
+    result.push(trimmed);
   }
   for (const required of REQUIRED_ACCEPT_TYPES) {
     if (!seen.has(required)) {
@@ -90,101 +50,175 @@ export function normaliseAcceptHeader(value: string | string[] | undefined): str
   return result.join(", ");
 }
 
-function ensureAcceptHeader(request: IncomingMessage): void {
+function ensureAcceptHeader(request: Request): void {
   request.headers.accept = normaliseAcceptHeader(request.headers.accept);
 }
 
-function logRequest(request: IncomingMessage, response: ServerResponse, startedAt: number): void {
-  if (!debugEnabled()) {
-    return;
-  }
-  response.on("finish", () => {
-    const elapsed = Date.now() - startedAt;
-    console.log(
-      JSON.stringify({
-        method: request.method ?? "",
-        url: request.url ?? "",
-        status: response.statusCode,
-        elapsedMs: elapsed
-      })
-    );
-  });
+function createCorsMiddleware(config?: HttpTransportConfig) {
+  const allowOrigin = config?.corsAllowOrigin ?? "*";
+  const allowHeaders =
+    config?.corsAllowHeaders ?? "Content-Type, MCP-Session-Id, MCP-Protocol-Version";
+  const allowMethods = config?.corsAllowMethods ?? "GET,POST,DELETE,OPTIONS";
+  return (_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader("Access-Control-Allow-Origin", allowOrigin);
+    res.setHeader("Access-Control-Allow-Headers", allowHeaders);
+    res.setHeader("Access-Control-Allow-Methods", allowMethods);
+    next();
+  };
 }
 
-export async function startHttpBridge(server: Server, options: { port: number; host?: string }): Promise<number> {
+function createRequestLogger(subsystem: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!isDebugEnabled()) {
+      next();
+      return;
+    }
+    const startedAt = Date.now();
+    res.on("finish", () => {
+      const elapsed = Date.now() - startedAt;
+      const payload = {
+        subsystem,
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        elapsedMs: elapsed
+      };
+      process.stdout.write(`${JSON.stringify(payload)}\n`);
+    });
+    next();
+  };
+}
+
+function createJsonRpcLogger(subsystem: string) {
+  return {
+    inbound(message: unknown) {
+      if (!isDebugEnabled()) {
+        return;
+      }
+      const record = typeof message === "object" && message !== null ? (message as Record<string, unknown>) : undefined;
+      const type = Array.isArray(message) ? "batch" : record?.method ? "request" : record?.result !== undefined || record?.error !== undefined ? "response" : "unknown";
+      const payload = {
+        subsystem,
+        direction: "inbound",
+        type,
+        id: record?.id ?? null,
+        method: record?.method
+      };
+      process.stdout.write(`${JSON.stringify(payload)}\n`);
+    },
+    outbound(message: unknown) {
+      if (!isDebugEnabled()) {
+        return;
+      }
+      const record = typeof message === "object" && message !== null ? (message as Record<string, unknown>) : undefined;
+      const payload = {
+        subsystem,
+        direction: "outbound",
+        id: record?.id ?? null,
+        method: record?.method ?? null,
+        hasError: Boolean(record?.error)
+      };
+      process.stdout.write(`${JSON.stringify(payload)}\n`);
+    }
+  };
+}
+
+function applyTransportObservers(
+  transport: StreamableHTTPServerTransport,
+  logger: ReturnType<typeof createJsonRpcLogger>
+): void {
+  const existingSend = transport.send.bind(transport);
+  transport.send = async (message, options) => {
+    logger.outbound(message);
+    return existingSend(message, options);
+  };
+  const previousOnMessage = transport.onmessage;
+  transport.onmessage = (message, extra) => {
+    logger.inbound(message);
+    previousOnMessage?.(message, extra);
+  };
+}
+
+function respondWithJson(res: Response, status: number, body: unknown): void {
+  if (!res.headersSent) {
+    res.status(status).json(body);
+    return;
+  }
+  res.end();
+}
+
+export async function startHttpBridge(
+  server: Server,
+  options: { port: number; host?: string }
+): Promise<{ port: number; close: () => Promise<void> }> {
   const { port, host } = options;
   const context = getServerContext(server);
   const httpConfig = context.runtime.transport.kind === "http" ? context.runtime.transport : undefined;
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-    enableJsonResponse: httpConfig?.enableJsonResponse ?? true,
-    allowedHosts: httpConfig?.allowedHosts,
-    allowedOrigins: httpConfig?.allowedOrigins,
-    enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false
+  const app = express();
+  app.disable("x-powered-by");
+  app.use(createCorsMiddleware(httpConfig));
+  app.use(createRequestLogger("http.server"));
+  app.use(express.json({ limit: JSON_BODY_LIMIT }));
+
+  app.options(MCP_PATH, (_req, res) => {
+    res.status(204).end();
   });
 
-  transport.onerror = error => {
-    const reason = error instanceof Error ? error.message : String(error);
-    context.logger.error("http_transport_error", { reason });
-  };
+  app.get(HEALTH_PATH, (_req, res) => {
+    res.json({
+      ok: true,
+      transport: "http",
+      name: PROJECT_NAME,
+      version: PACKAGE_VERSION,
+      tools: context.tools.map(tool => tool.name)
+    });
+  });
 
-  await server.connect(transport);
-
-  const httpServer = createHttpServer(async (request, response) => {
-    const startedAt = Date.now();
-    logRequest(request, response, startedAt);
-    const url = parseUrl(request.url);
-    const path = url.pathname;
-
-    if (request.method === "OPTIONS" && (SUPPORTED_PATHS.has(path) || path === HEALTH_PATH)) {
-      applyCors(response, httpConfig);
-      response.writeHead(204).end();
-      return;
-    }
-
-    if (request.method === "GET" && path === HEALTH_PATH) {
-      applyCors(response, httpConfig);
-      writeJson(response, 200, { ok: true });
-      return;
-    }
-
-    if (!SUPPORTED_PATHS.has(path)) {
-      applyCors(response, httpConfig);
-      writeJson(response, 404, { error: "Not Found" });
-      return;
-    }
-
-    if (process.env.MCP_PANIC_MODE === "1") {
-      applyCors(response, httpConfig);
-      writeJson(response, 200, { jsonrpc: "2.0", id: null, result: {} });
-      return;
-    }
-
-    applyCors(response, httpConfig);
-
-    if ((request.method ?? "").toUpperCase() === "POST") {
-      ensureAcceptHeader(request);
-    }
-
+  app.post(MCP_PATH, async (req, res) => {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: httpConfig?.enableJsonResponse ?? true,
+      allowedHosts: httpConfig?.allowedHosts,
+      allowedOrigins: httpConfig?.allowedOrigins,
+      enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false
+    });
+    transport.onerror = error => {
+      const reason = error instanceof Error ? error.message : String(error);
+      context.logger.error("http_transport_error", { reason });
+    };
+    applyTransportObservers(transport, createJsonRpcLogger("http.rpc"));
+    res.on("close", () => {
+      void transport.close();
+    });
     try {
-      await transport.handleRequest(request as IncomingMessage, response);
+      ensureAcceptHeader(req);
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      context.logger.error("http_request_failed", { reason, method: request.method, path });
-      writeJson(response, 500, { error: "Internal Server Error" });
+      context.logger.error("http_request_failed", {
+        reason,
+        method: req.method,
+        path: req.path
+      });
+      respondWithJson(res, 500, {
+        jsonrpc: "2.0",
+        error: { code: -32603, message: "Internal Server Error" },
+        id: null
+      });
     }
   });
 
-  const timeoutMs = httpConfig?.initializeTimeoutMs ?? context.runtime.httpInitializeTimeoutMs;
-  httpServer.requestTimeout = timeoutMs;
-  httpServer.headersTimeout = timeoutMs;
-  httpServer.keepAliveTimeout = 5000;
+  app.use((req, res) => {
+    respondWithJson(res, 404, { error: "Not Found" });
+  });
 
+  const serverInstance = app.listen(port, host);
   const actualPort = await new Promise<number>((resolve, reject) => {
-    httpServer.once("error", reject);
-    const onListen = () => {
-      httpServer.off("error", reject);
-      const address = httpServer.address();
+    serverInstance.once("error", reject);
+    serverInstance.once("listening", () => {
+      serverInstance.off("error", reject);
+      const address = serverInstance.address();
       if (address && typeof address === "object") {
         resolve((address as AddressInfo).port);
         return;
@@ -194,13 +228,19 @@ export async function startHttpBridge(server: Server, options: { port: number; h
         return;
       }
       resolve(port);
-    };
-    if (host) {
-      httpServer.listen(port, host, onListen);
-    } else {
-      httpServer.listen(port, onListen);
-    }
+    });
   });
 
-  return actualPort;
+  const close = async () =>
+    new Promise<void>((resolve, reject) => {
+      serverInstance.close(error => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+  return { port: actualPort, close };
 }
