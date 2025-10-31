@@ -1,5 +1,9 @@
 # Audit Log
 
+## 2025-11-03
+- Added an idle timeout for HTTP sessions so transports started without a matching `DELETE` request are closed after 60 seconds,
+  protecting the bridge from abandoned connections.
+
 ## 2025-10-31
 - Hardened the initialise handshake to return `INVALID_PARAMS` when `apiToken` or `defaultTeamId` are missing so Smithery sees a healthy 200 response and can prompt for credentials instead of tripping an HTTP 500.
 
