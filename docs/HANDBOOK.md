@@ -68,6 +68,7 @@ Infrastructure Gateway → ClickUp REST API
 | `CLICKUP_DEFAULT_TEAM_ID` | Fallback team identifier applied when a tool input omits one. | `0` | Use only when a single-team deployment is assumed. |
 | `LOG_LEVEL` | Granularity of operational logging. | `info` | Accepts `debug`, `info`, `warn`, `error`. |
 | `FEATURE_PERSISTENCE` | Enables persistence-dependent features for long-running sessions. | `false` | Set to `true` only when persistence storage is configured. |
+| `MCP_HTTP_INITIALIZE_TIMEOUT_MS` | Timeout for the HTTP bridge `initialize` handshake in milliseconds. | `45000` | Honoured by the HTTP transport; overrides the fallback used when transport config omits a value. |
 | `MAX_ATTACHMENT_MB` | Attachment size ceiling per request. | `8` | Converted to bytes internally. |
 | `MAX_BULK_CONCURRENCY` | Concurrent outbound request cap during bulk operations. | `10` | Values below 1 are coerced to 1. |
 

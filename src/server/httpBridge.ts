@@ -194,7 +194,9 @@ export async function startHttpBridge(
         enableJsonResponse: httpConfig?.enableJsonResponse ?? true,
         allowedHosts: httpConfig?.allowedHosts,
         allowedOrigins: httpConfig?.allowedOrigins,
-        enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false
+        enableDnsRebindingProtection: httpConfig?.enableDnsRebindingProtection ?? false,
+        initializeTimeoutMs:
+          httpConfig?.initializeTimeoutMs ?? context.runtime.httpInitializeTimeoutMs
       });
       transport.onerror = error => {
         const reason = error instanceof Error ? error.message : String(error);
